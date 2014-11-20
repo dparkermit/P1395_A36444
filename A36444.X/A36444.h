@@ -262,11 +262,11 @@ typedef struct {
   AnalogInput analog_input_pic_adc_test_dac;          // 62.5uV per LSB
 
 
-  AnalogOutput analog_output_high_energy_vprog;
-  AnalogOutput analog_output_low_energy_vprog;
+  AnalogOutput analog_output_high_energy_vprog;       // 1V per LSB
+  AnalogOutput analog_output_low_energy_vprog;        // 1V per LSB
 
-  AnalogOutput analog_output_spare;
-  AnalogOutput analog_output_adc_test;
+  AnalogOutput analog_output_spare;                   // 1mV per LSB
+  AnalogOutput analog_output_adc_test;                // 62.5uV per LSB
 
   unsigned int accumulator_counter;
 
