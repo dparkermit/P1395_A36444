@@ -10,6 +10,8 @@
 #endif
 
 
+unsigned int global_reset_faults;
+
 void ETMCanSetValueBoardSpecific(ETMCanMessage* message_ptr) {
   unsigned int index_word;
   index_word = message_ptr->word3;
@@ -24,14 +26,14 @@ void ETMCanSetValueBoardSpecific(ETMCanMessage* message_ptr) {
     ETMAnalogSetOutput(&global_data_A36224_500.analog_output_electromagnet_current, message_ptr->word0);
     ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_WAITING_INITIAL_CONFIG);
     break;
+
 #endif
-    
+
 
 #ifdef __A36444
   case ETM_CAN_REGISTER_HV_LAMBDA_SET_1_LAMBDA_SET_POINT:
     ETMAnalogSetOutput(&global_data_A36444.analog_output_high_energy_vprog, message_ptr->word1); 
     ETMAnalogSetOutput(&global_data_A36444.analog_output_low_energy_vprog,message_ptr->word2);
-    ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_WAITING_INITIAL_CONFIG);
     break;
 #endif
 
@@ -67,13 +69,13 @@ void ETMCanExecuteCMDBoardSpecific(ETMCanMessage* message_ptr) {
     
     
     
-#ifdef __A36444
+#ifdef __A_WHATEVER_HV_LAMBDA_IS
     case ETM_CAN_REGISTER_HV_LAMBDA_CMD_HV_ON:
-      ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE); 
+      etm_can_status_register.status_word_1 = 0x0000;
       break;
       
     case ETM_CAN_REGISTER_HV_LAMBDA_CMD_HV_OFF:
-      ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE);
+      etm_can_status_register.status_word_1 = 0xFFFF;
       break;
 #endif
       
@@ -108,6 +110,7 @@ void ETMCanReturnValueBoardSpecific(ETMCanMessage* message_ptr) {
 
 void ETMCanResetFaults(void) {
   // Reset faults associated with this board
+  global_reset_faults = 1;
 }
 
 

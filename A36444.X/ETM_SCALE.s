@@ -6,10 +6,10 @@
 .endif
 
 .section .nbss, bss, near    	
-	_saturation_etmscalefactor2_count:	.space 2
-	.global _saturation_etmscalefactor2_count
-	_saturation_etmscalefactor16_count:	.space 2
-	.global _saturation_etmscalefactor16_count
+	_etm_scale_saturation_etmscalefactor2_count:	.space 2
+	.global _etm_scale_saturation_etmscalefactor2_count
+	_etm_scale_saturation_etmscalefactor16_count:	.space 2
+	.global _etm_scale_saturation_etmscalefactor16_count
 .text	
 
 
@@ -35,7 +35,7 @@ _ETMScaleFactor2:
 	;; There was overflow with the negative offset
 	;; Increment the overflow counter and set the results to 0x0000
 	MOV		#0x0000, W0
-	INC		_saturation_etmscalefactor2_count
+	INC		_etm_scale_saturation_etmscalefactor2_count
 	BRA             _ETMScaleFactor2_addition_done	
 
 _ETMScaleFactor2_offset_not_negative:		
@@ -46,7 +46,7 @@ _ETMScaleFactor2_offset_not_negative:
 	;; There was an overflow in the addition
 	;; Increment the overflow counter and set the results to 0xFFFF
 	MOV		#0xFFFF, W0
-	INC		_saturation_etmscalefactor2_count
+	INC		_etm_scale_saturation_etmscalefactor2_count
 	BRA             _ETMScaleFactor2_addition_done	
 
 _ETMScaleFactor2_addition_done:		
@@ -58,7 +58,7 @@ _ETMScaleFactor2_addition_done:
 	;; There was an overflow in the multiply opertion
 	;; Increment the overflow counter and set the result to 0xFFFF
 	MOV		#0xFFFF, W0
-	INC		_saturation_etmscalefactor2_count
+	INC		_etm_scale_saturation_etmscalefactor2_count
 _ETMScaleFactor2_multiply_ok:	
 	;; OR together W0, W1 into W0 to give the final results
 	LSR		W2, #15, W1		; Take the 1 MSbits of W2 and store then as the 1 LSB of W1
@@ -90,7 +90,7 @@ _ETMScaleFactor16:
 	;; There was overflow with the negative offset
 	;; Increment the overflow counter and set the results to 0x0000
 	MOV		#0x0000, W0
-	INC		_saturation_etmscalefactor16_count
+	INC		_etm_scale_saturation_etmscalefactor16_count
 	BRA             _ETMScaleFactor16_addition_done	
 
 _ETMScaleFactor16_offset_not_negative:		
@@ -101,7 +101,7 @@ _ETMScaleFactor16_offset_not_negative:
 	;; There was an overflow in the addition
 	;; Increment the overflow counter and set the results to 0xFFFF
 	MOV		#0xFFFF, W0
-	INC		_saturation_etmscalefactor16_count
+	INC		_etm_scale_saturation_etmscalefactor16_count
 	BRA             _ETMScaleFactor16_addition_done	
 
 _ETMScaleFactor16_addition_done:		
@@ -114,7 +114,7 @@ _ETMScaleFactor16_addition_done:
 	;; There was an overflow in the multiply opertion
 	;; Increment the overflow counter and set the result to 0xFFFF
 	MOV		#0xFFFF, W0
-	INC		_saturation_etmscalefactor16_count
+	INC		_etm_scale_saturation_etmscalefactor16_count
 _ETMScaleFactor16_no_overflow:	
 	;; OR together W0, W1 into W0 to give the final results
 	LSR		W2, #12, W1		; Take the 4 MSbits of W2 and store then as the 4 LSB of W1

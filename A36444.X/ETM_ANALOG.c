@@ -212,7 +212,7 @@ unsigned int ETMAnalogCheckUnderRelative(AnalogInput* ptr_analog_input) {
     compare_point = ptr_analog_input->relative_trip_point_floor;
   }
   
-  if (compare_point > ptr_analog_input->target_value) {
+  if (compare_point < ptr_analog_input->target_value) {
     compare_point = ptr_analog_input->target_value - compare_point;
   } else {
     // In this case we will never get an under relative fault
