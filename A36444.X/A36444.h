@@ -17,7 +17,7 @@
   Timer2 - Used/Configured by ETM CAN - Used to Time sending of messages (status update / logging data and such) 
   Timer3 - Used/Configured by ETM CAN - Used for detecting error on can bus
 
-  SPI1   - Used/Configured by LTC2654 Module
+  SPI1   - Used/Configured by LTC265X Module
   I2C    - Used/Configured by EEPROM Module
 
 
@@ -121,20 +121,23 @@
 #define PIN_AUTO_INHIBIT                      _RA14
 
 #define PIN_LAMBDA_EOC                        _RA15
+#define PIN_LAMBDA_HV_ON_READBACK             _RD15
 #define PIN_LAMBDA_NOT_POWERED                _RD8
+
+#define PIN_LAMBDA_SUM_FLT                    _RD13
+#define PIN_LAMBDA_PHASE_LOSS_FLT             _RD14
 #define PIN_LAMBDA_OVER_TEMP_FLT              _RD9
 #define PIN_LAMBDA_INTERLOCK_FLT              _RD10
 #define PIN_LAMBDA_LOAD_FLT                   _RD12
-#define PIN_LAMBDA_SUM_FLT                    _RD13
-#define PIN_LAMDBA_PHASE_LOSS_FLT             _RD14
-#define PIN_LAMBDA_HV_ON_READBACK             _RD15
+
+
 
 #define PIN_RESET_DETECT                      _RG14
 
 
 #define ILL_HIGH_ENERGY_SELECTED              1
 #define ILL_LAMBDA_AT_EOC                     1
-#define ILL_LAMBDA_NOT_NOT_POWERED            1
+#define ILL_LAMBDA_NOT_POWERED                1
 #define ILL_LAMBDA_HV_ON                      1
 #define ILL_LAMBDA_FAULT_ACTIVE               1
 
@@ -149,7 +152,7 @@
 
 #define PIN_LED_OPERATIONAL_GREEN             _LATA7
 #define PIN_LED_A_RED                         _LATG12
-#define PIN_LED_B_GREEN                       _LATG13
+#define PIN_LED_B_GREEN                       _LATG13  // This is is configured by the CAN module to flash on CAN Bus activity
 
 #define PIN_OUT_TP_A                          _LATF4
 #define PIN_OUT_TP_B                          _LATF5
@@ -225,29 +228,39 @@
    With 10Mhz Clock, x8 multiplier will yield max period of 17.7mS, 2.71uS per tick
 */
 
-#define T5CON_VALUE                    (T5_OFF & T5_IDLE_CON & T5_GATE_OFF & T5_PS_1_8 & T5_SOURCE_INT)
+#define T5CON_VALUE                    (T5_ON & T5_IDLE_CON & T5_GATE_OFF & T5_PS_1_8 & T5_SOURCE_INT)
 #define PR5_PERIOD_US                  10000   // 10mS
 #define PR5_VALUE_10_MILLISECONDS      (FCY_CLK_MHZ*PR5_PERIOD_US/8)
 
 
 
 // -------------------- A36444 STATUS BIT CONFIGURATION ------------------------ //
-#define STATUS_LAMBDA_AT_EOC                   ETM_CAN_STATUS_WORD_0_USER_DEFINED_8
-#define STATUS_HV_SOFTWARE_DISABLE             ETM_CAN_STATUS_WORD_0_USER_DEFINED_9
-#define STATUS_LAMBDA_READBACK_HV_OFF          ETM_CAN_STATUS_WORD_0_USER_DEFINED_10
-#define STATUS_LAMBDA_HIGH_ENERGY              ETM_CAN_STATUS_WORD_0_USER_DEFINED_11
-#define STATUS_LAMBDA_NOT_POWERED              ETM_CAN_STATUS_WORD_0_USER_DEFINED_12
+#define STATUS_LAMBDA_AT_EOC                   STATUS_BIT_USER_DEFINED_8
+#define STATUS_BIT_SOFTWARE_DISABLE            STATUS_BIT_USER_DEFINED_9
+#define STATUS_LAMBDA_READBACK_HV_OFF          STATUS_BIT_USER_DEFINED_10
+#define STATUS_LAMBDA_HIGH_ENERGY              STATUS_BIT_USER_DEFINED_11
+#define STATUS_LAMBDA_NOT_POWERED              STATUS_BIT_USER_DEFINED_12
 
 
 
 // -------------------- A36444 FAULTS/WARNINGS CONFIGURATION-------------------- //
-#define FAULT_LAMBDA_SUM_FAULT                 ETM_CAN_STATUS_WORD_1_FAULT_USER_DEFINED_1
-#define FAULT_LAMBDA_PHASE_LOSS_FAULT          ETM_CAN_STATUS_WORD_1_FAULT_USER_DEFINED_2
-#define FAULT_LAMBDA_OVER_TEMP_FAULT           ETM_CAN_STATUS_WORD_1_FAULT_USER_DEFINED_3
-#define FAULT_LAMBDA_INTERLOCK_FAULT           ETM_CAN_STATUS_WORD_1_FAULT_USER_DEFINED_4
-#define FAULT_LAMBDA_LOAD_FAULT                ETM_CAN_STATUS_WORD_1_FAULT_USER_DEFINED_5
-#define FAULT_LAMBDA_EOC_WARNING               ETM_CAN_STATUS_WORD_1_FAULT_USER_DEFINED_6
-#define FAULT_LAMBDA_ANALOG_TEMP_OOR           ETM_CAN_STATUS_WORD_1_FAULT_USER_DEFINED_7
+#define FAULT_LAMBDA_SUM_FAULT                 FAULT_BIT_USER_DEFINED_1
+#define FAULT_LAMBDA_PHASE_LOSS_FAULT          FAULT_BIT_USER_DEFINED_2
+#define FAULT_LAMBDA_OVER_TEMP_FAULT           FAULT_BIT_USER_DEFINED_3
+#define FAULT_LAMBDA_INTERLOCK_FAULT           FAULT_BIT_USER_DEFINED_4
+#define FAULT_LAMBDA_LOAD_FAULT                FAULT_BIT_USER_DEFINED_5
+#define FAULT_LAMBDA_EOC_WARNING               FAULT_BIT_USER_DEFINED_6
+#define FAULT_LAMBDA_ANALOG_TEMP_OOR           FAULT_BIT_USER_DEFINED_7
+
+
+// -------------------- FAULT CONFIGURATION -------------------------------------- //
+#define A36444_INHIBIT_MASK        0b0001011000000100  
+#define A36444_FAULT_MASK          0b0000000000000011  
+
+
+
+
+
 
 
 typedef struct {
@@ -269,14 +282,23 @@ typedef struct {
   AnalogOutput analog_output_adc_test;                // 62.5uV per LSB
 
   unsigned int accumulator_counter;
-
   unsigned int adc_ignore_current_sample;
-
   unsigned int eoc_not_reached_count;
+  unsigned int control_state;
+  unsigned int led_divider;
 
 } LambdaControlData;
 
 extern LambdaControlData global_data_A36444;
+
+
+
+#define STATE_STARTUP                0x10
+#define STATE_WAITING_FOR_CONFIG     0x20
+#define STATE_STANDBY                0x30
+#define STATE_OPERATE                0x40
+#define STATE_FAULT                  0x50
+
 
 
 #endif

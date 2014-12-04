@@ -2,8 +2,6 @@
 #include "ETM_EEPROM.h"
 #include "LTC265X.h"
 
-
-
 // This is firmware for the HV Lambda Board
 
 _FOSC(ECIO & CSW_FSCM_OFF); 
@@ -14,49 +12,209 @@ _FSS(WR_PROT_SEC_OFF & NO_SEC_CODE & NO_SEC_EEPROM & NO_SEC_RAM);
 _FGS(CODE_PROT_OFF);
 _FICD(PGD);
 
-#define CALIBRATION_DATA_START_REGISTER             0x400
-
-unsigned int ETMCanEEPromReadWord(unsigned int register_address);
-void ETMCanReadCalibrationAnalogInput(AnalogInput* ptr_analog_input, unsigned char input_channel);
-void ETMCanReadCalibrationAnalogOutput(AnalogOutput* ptr_analog_output, unsigned char output_channel);
-
-
-
-void InitializeA36444(void);
-
 
 LTC265X U14_LTC2654;
 ETMEEProm U3_M24LC64F;
 LambdaControlData global_data_A36444;
 
 
+void InitializeA36444(void);
+void DoStateMachine(void);
+void EnableHVLambda(void);
+void DisableHVLambda(void);
+void DoA36444(void);
+
+
 int main(void) {
-  
-
-  
-  ETMCanInitialize();
-
-  InitializeA36444();
-
-  
-  //#define ETM_CAN_REGISTER_CALIBRATION_TEST          0x0400
-  //#define ETM_CAN_REGISTER_LOCAL_TEST                0x0100
-  
-
-  
+  global_data_A36444.control_state = STATE_STARTUP;
   while (1) {
-    ETMCanDoCan();
+    DoStateMachine();
   }
 }
 
 
-#define A36444_INHIBIT_MASK        0b0001011000000100  
-#define A36444_FAULT_MASK          0b0000000000000011  
 
+void DoStateMachine(void) {
+  switch (global_data_A36444.control_state) {
+    
+  case STATE_STARTUP:
+    InitializeA36444();
+    global_data_A36444.control_state = STATE_WAITING_FOR_CONFIG;
+    break;
+    
+  case STATE_WAITING_FOR_CONFIG:
+    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_WAITING_INITIAL_CONFIG);
+    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE);
+    DisableHVLambda();  
+    while (global_data_A36444.control_state == STATE_WAITING_FOR_CONFIG) {
+      DoA36444();
+      ETMCanDoCan();
+      
+      if (!ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_BOARD_WAITING_INITIAL_CONFIG)) {
+	global_data_A36444.control_state = STATE_STANDBY;
+      }
+      
+      if (ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SUM_FAULT)) {
+	global_data_A36444.control_state = STATE_FAULT;
+      }
+    }
+    break;
+
+  case STATE_STANDBY:
+    DisableHVLambda();  
+    while (global_data_A36444.control_state == STATE_STANDBY) {
+      DoA36444();
+      ETMCanDoCan();
+      
+      if (!ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE)) {
+	global_data_A36444.control_state = STATE_OPERATE;
+      }
+      
+      if (ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SUM_FAULT)) {
+	global_data_A36444.control_state = STATE_FAULT;
+      }
+    }
+    break;
+
+  case STATE_OPERATE:
+    EnableHVLambda(); 
+    while (global_data_A36444.control_state == STATE_OPERATE) {
+      DoA36444();
+      ETMCanDoCan();
+
+      if (ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE)) {
+	global_data_A36444.control_state = STATE_STANDBY;
+      }
+      
+      if (ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SUM_FAULT)) {
+	global_data_A36444.control_state = STATE_FAULT;
+      }
+    }
+    break;
+
+
+  case STATE_FAULT:
+    DisableHVLambda();  
+    while (global_data_A36444.control_state == STATE_FAULT) {
+      DoA36444();
+      ETMCanDoCan();
+      if (!ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SUM_FAULT)) {
+	// The faults have been cleared
+	global_data_A36444.control_state = STATE_WAITING_FOR_CONFIG;
+      }
+    }
+    break;
+        
+  default:
+    global_data_A36444.control_state = STATE_FAULT;
+    break;
+  }
+  
+}
+
+
+void DoA36444(void) {
+  
+  if (_T5IF) {
+    // 10ms Timer has expired so this code will execute once every 10ms
+    _T5IF = 0;
+    
+    
+    // Flash the operate LED
+    global_data_A36444.led_divider++;
+    if (global_data_A36444.led_divider >= 50) {
+      global_data_A36444.led_divider = 0;
+      if (PIN_LED_OPERATIONAL_GREEN) {
+	PIN_LED_OPERATIONAL_GREEN = 0;
+      } else {
+	PIN_LED_OPERATIONAL_GREEN = 1;
+      }
+    }
+
+    // Set the fault LED
+    if (etm_can_status_register.status_word_0 & 0x0003) {
+      // The board is faulted or inhibiting the system
+      PIN_LED_A_RED = OLL_LED_ON;
+    } else {
+      PIN_LED_A_RED = !OLL_LED_ON;
+    }
+
+    // Update the digital input status pins
+    if (PIN_LAMBDA_EOC == ILL_LAMBDA_AT_EOC) {
+      ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_AT_EOC);
+    } else {
+      ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_AT_EOC);
+    }
+    
+    if (PIN_LAMBDA_HV_ON_READBACK != ILL_LAMBDA_HV_ON) {
+      ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_READBACK_HV_OFF);
+    } else {
+      ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_READBACK_HV_OFF);
+    }
+
+    if (PIN_LAMBDA_NOT_POWERED == ILL_LAMBDA_NOT_POWERED) {
+      ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_NOT_POWERED);
+    } else {
+      ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_NOT_POWERED);
+    }
+
+
+    // Update the digital input fault pins
+    if (PIN_LAMBDA_SUM_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
+      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_SUM_FAULT);
+    }
+
+    if (PIN_LAMBDA_PHASE_LOSS_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
+      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_PHASE_LOSS_FAULT);
+    }
+
+    if (PIN_LAMBDA_OVER_TEMP_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
+      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_OVER_TEMP_FAULT);
+    }
+
+    if (PIN_LAMBDA_INTERLOCK_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
+      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_INTERLOCK_FAULT);
+    }
+
+    if (PIN_LAMBDA_LOAD_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
+      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_LOAD_FAULT);
+    }
+
+    // Do Math on the ADC inputs
+    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_lambda_vmon);
+    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_lambda_vpeak);
+    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_lambda_imon);
+    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_lambda_heat_sink_temp);
+    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_5v_mon);
+    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_15v_mon);
+    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_neg_15v_mon);
+    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_pic_adc_test_dac);
+  
+    // Look for faults on the Analog inputs
+    if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_lambda_heat_sink_temp)) {
+      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_ANALOG_TEMP_OOR);
+    }
+    
+    // Update the HV Lambda Program Values
+    WriteLTC265XTwoChannels(&U14_LTC2654,
+			    LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A36444.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
+			    LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A36444.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
+
+    if (global_data_A36444.control_state != STATE_OPERATE) {
+      // Update the spare analog output and the DAC test output
+      // DPARKER probably need to remove this
+      WriteLTC265XTwoChannels(&U14_LTC2654,
+			      LTC265X_WRITE_AND_UPDATE_DAC_A, global_data_A36444.analog_output_spare.dac_setting_scaled_and_calibrated,
+			      LTC265X_WRITE_AND_UPDATE_DAC_B, global_data_A36444.analog_output_adc_test.dac_setting_scaled_and_calibrated);
+    }
+  }
+}
 
 
 void InitializeA36444(void) {
-  
+  unsigned int n;
+
+  // Initialize the status register and load the inhibit and fault masks
   etm_can_status_register.status_word_0 = 0x0000;
   etm_can_status_register.status_word_1 = 0x0000;
   etm_can_status_register.data_word_A = 0x0000;
@@ -64,12 +222,15 @@ void InitializeA36444(void) {
   etm_can_status_register.status_word_0_inhbit_mask = A36444_INHIBIT_MASK;
   etm_can_status_register.status_word_1_fault_mask  = A36444_FAULT_MASK;
 
+
   // Configure Inhibit Interrupt
   _INT3IP = 7; // This must be the highest priority interrupt
   _INT1EP = 0; // Positive Transition
+
   
   // Configure ADC Interrupt
   _ADIP   = 6; // This needs to be higher priority than the CAN interrupt (Which defaults to 4)
+
   
   
   // Initialize all I/O Registers
@@ -80,16 +241,39 @@ void InitializeA36444(void) {
   TRISF = A36444_TRISF_VALUE;
   TRISG = A36444_TRISG_VALUE;
 
+
+
+  // Flash LEDs at Startup
+  for (n = 0; n < 5; n++) {
+    PIN_LED_OPERATIONAL_GREEN = OLL_LED_ON;
+    __delay32(1000000);
+    ClrWdt();
+    PIN_LED_OPERATIONAL_GREEN = !OLL_LED_ON;
+    PIN_LED_A_RED             = OLL_LED_ON;
+    __delay32(1000000);
+    ClrWdt();
+    PIN_LED_A_RED             = !OLL_LED_ON;
+    PIN_LED_B_GREEN           = OLL_LED_ON;
+    __delay32(1000000);
+    ClrWdt();
+    PIN_LED_B_GREEN           = !OLL_LED_ON;
+  }
+
   // Initialize TMR1
-  T1CON = T1CON_VALUE;
   TMR1  = 0;
   _T1IF = 0;
+  T1CON = T1CON_VALUE;
+
+
   
   // Initialize TMR5
-  T5CON = T5CON_VALUE;
+  PR5   = PR5_VALUE_10_MILLISECONDS;
   TMR5  = 0;
   _T5IF = 0;
-  PR5   = PR5_VALUE_10_MILLISECONDS;
+  T5CON = T5CON_VALUE;
+
+
+  
   
   // Initialize interal ADC
   // ---- Configure the dsPIC ADC Module ------------ //
@@ -107,63 +291,65 @@ void InitializeA36444(void) {
   
   // Initialize LTC DAC
   SetupLTC265X(&U14_LTC2654, ETM_SPI_PORT_1, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RG15, _PIN_RC1);
+
   
   // Initialize the External EEprom
   ETMEEPromConfigureDevice(&U3_M24LC64F, EEPROM_I2C_ADDRESS_0, I2C_PORT, EEPROM_SIZE_8K_BYTES, FCY_CLK, ETM_I2C_400K_BAUD);
 
+
+  // Initialize the Can module
+  ETMCanInitialize();
+
+
   // LOAD Scaling and Calibration data for analog Inputs and outputs
   // Fixed values are generate from spreadsheet.
   // Calibration Data is read from EEProm
-  global_data_A36444.analog_input_lambda_vmon.fixed_scale  = MACRO_DEC_TO_SCALE_FACTOR_16(.28125);
-  global_data_A36444.analog_input_lambda_vmon.fixed_offset = 0;
-  ETMCanReadCalibrationAnalogInput(&global_data_A36444.analog_input_lambda_vmon, 0xFF);
-  
-  global_data_A36444.analog_input_lambda_vpeak.fixed_scale = MACRO_DEC_TO_SCALE_FACTOR_16(.28125);
-  global_data_A36444.analog_input_lambda_vpeak.fixed_offset = 0;
-  ETMCanReadCalibrationAnalogInput(&global_data_A36444.analog_input_lambda_vpeak, 0xFF);
-  
-  global_data_A36444.analog_input_lambda_imon.fixed_scale  = MACRO_DEC_TO_SCALE_FACTOR_16(.40179);
-  global_data_A36444.analog_input_lambda_imon.fixed_offset = 0;
-  ETMCanReadCalibrationAnalogInput(&global_data_A36444.analog_input_lambda_imon, 0xFF);
 
-  global_data_A36444.analog_input_lambda_heat_sink_temp.fixed_scale  = MACRO_DEC_TO_SCALE_FACTOR_16(.78125);
-  global_data_A36444.analog_input_lambda_heat_sink_temp.fixed_offset = 10000;
-  ETMCanReadCalibrationAnalogInput(&global_data_A36444.analog_input_lambda_heat_sink_temp, 0xFF);
-
-  global_data_A36444.analog_input_5v_mon.fixed_scale  = MACRO_DEC_TO_SCALE_FACTOR_16(.10417);
-  global_data_A36444.analog_input_5v_mon.fixed_offset = 0;
-  ETMCanReadCalibrationAnalogInput(&global_data_A36444.analog_input_5v_mon, 0xFF);
-
-  global_data_A36444.analog_input_15v_mon.fixed_scale  = MACRO_DEC_TO_SCALE_FACTOR_16(.26500);
-  global_data_A36444.analog_input_15v_mon.fixed_offset = 0;
-  ETMCanReadCalibrationAnalogInput(&global_data_A36444.analog_input_15v_mon, 0xFF);
-
-  global_data_A36444.analog_input_neg_15v_mon.fixed_scale  = MACRO_DEC_TO_SCALE_FACTOR_16(.15625);
-  global_data_A36444.analog_input_neg_15v_mon.fixed_offset = 0;
-  ETMCanReadCalibrationAnalogInput(&global_data_A36444.analog_input_neg_15v_mon, 0xFF);
-
-  global_data_A36444.analog_input_pic_adc_test_dac.fixed_scale  = MACRO_DEC_TO_SCALE_FACTOR_16(1);
-  global_data_A36444.analog_input_pic_adc_test_dac.fixed_offset = 0;
-  ETMCanReadCalibrationAnalogInput(&global_data_A36444.analog_input_pic_adc_test_dac, 0xFF);
-  
-
+#define LAMBDA_HEATSINK_OVER_TEMP      57000       //57 Deg C
+#define TRIP_COUNTER_100mS             10
+#define TRIP_COUNTER_1Sec              100
 
   
-  global_data_A36444.analog_output_high_energy_vprog.fixed_scale = MACRO_DEC_TO_SCALE_FACTOR_16(2.96296);
-  global_data_A36444.analog_output_high_energy_vprog.fixed_offset = 0;
-  ETMCanReadCalibrationAnalogOutput(&global_data_A36444.analog_output_high_energy_vprog, 0xFF);
-
-  global_data_A36444.analog_output_low_energy_vprog.fixed_scale = MACRO_DEC_TO_SCALE_FACTOR_16(2.96296);
-  global_data_A36444.analog_output_low_energy_vprog.fixed_offset = 0;
-  ETMCanReadCalibrationAnalogOutput(&global_data_A36444.analog_output_low_energy_vprog, 0xFF);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_vmon, MACRO_DEC_TO_SCALE_FACTOR_16(.28125), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
+			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
   
-  global_data_A36444.analog_output_spare.fixed_scale = MACRO_DEC_TO_SCALE_FACTOR_16(5.33333);
-  global_data_A36444.analog_output_spare.fixed_offset = 0;
-  ETMCanReadCalibrationAnalogOutput(&global_data_A36444.analog_output_spare, 0xFF);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_vpeak, MACRO_DEC_TO_SCALE_FACTOR_16(.28125), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION, 
+			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+  
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_imon,  MACRO_DEC_TO_SCALE_FACTOR_16(.40179), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
+			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
 
-  global_data_A36444.analog_output_adc_test.fixed_scale = MACRO_DEC_TO_SCALE_FACTOR_16(1.00000);
-  global_data_A36444.analog_output_adc_test.fixed_offset = 0;
-  ETMCanReadCalibrationAnalogOutput(&global_data_A36444.analog_output_adc_test, 0xFF);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_heat_sink_temp, MACRO_DEC_TO_SCALE_FACTOR_16(.78125), 10000, ANALOG_INPUT_NO_CALIBRATION,
+			   LAMBDA_HEATSINK_OVER_TEMP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, TRIP_COUNTER_1Sec);
+
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_5v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.10417), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
+			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_15v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.26500), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
+			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_neg_15v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.15625), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
+			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_pic_adc_test_dac, MACRO_DEC_TO_SCALE_FACTOR_16(1), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
+			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+
+#define HV_LAMBDA_MAX_VPROG            18000
+#define HV_LAMBDA_MIN_VPROG            6000
+#define HV_LAMBDA_DAC_ZERO_OUTPUT      0x0000
+
+  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_high_energy_vprog, MACRO_DEC_TO_SCALE_FACTOR_16(2.96296), OFFSET_ZERO, ANALOG_OUTPUT_NO_CALIBRATION,
+			    HV_LAMBDA_MAX_VPROG, HV_LAMBDA_MIN_VPROG, HV_LAMBDA_DAC_ZERO_OUTPUT);
+
+  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_low_energy_vprog, MACRO_DEC_TO_SCALE_FACTOR_16(2.96296), OFFSET_ZERO, ANALOG_OUTPUT_NO_CALIBRATION,
+			    HV_LAMBDA_MAX_VPROG, HV_LAMBDA_MIN_VPROG, HV_LAMBDA_DAC_ZERO_OUTPUT);
+
+  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_spare, MACRO_DEC_TO_SCALE_FACTOR_16(5.33333), OFFSET_ZERO, ANALOG_OUTPUT_NO_CALIBRATION,
+			    10000, 0, 0);
+
+  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_adc_test, MACRO_DEC_TO_SCALE_FACTOR_16(1), OFFSET_ZERO, ANALOG_OUTPUT_NO_CALIBRATION,
+			    0xFFFF, 0, 0);
+
 }
 
 
@@ -256,62 +442,31 @@ void __attribute__((interrupt, no_auto_psv)) _DefaultInterrupt(void) {
 
 
 
-
-void ETMCanReadCalibrationAnalogInput(AnalogInput* ptr_analog_input, unsigned char input_channel) {
-  unsigned int cal_data_address;
-  if (input_channel == 0xFF) {
-    // this is a special case, set the calibration to gain of 1 and offset of zero
-    ptr_analog_input->calibration_internal_scale = MACRO_DEC_TO_CAL_FACTOR_2(1);
-    ptr_analog_input->calibration_internal_offset = 0;
-    ptr_analog_input->calibration_external_scale = MACRO_DEC_TO_CAL_FACTOR_2(1);
-    ptr_analog_input->calibration_external_offset = 0;
-  } else {
-    // load the adc internal calibration data 
-    cal_data_address = CALIBRATION_DATA_START_REGISTER + input_channel*2;
-    ptr_analog_input->calibration_internal_offset = ETMCanEEPromReadWord(cal_data_address);
-    ptr_analog_input->calibration_internal_scale  = ETMCanEEPromReadWord(cal_data_address+1);
-    // load_the adc external calibration data
-    cal_data_address = CALIBRATION_DATA_START_REGISTER + 0x20 + input_channel*2;
-    ptr_analog_input->calibration_external_offset = ETMCanEEPromReadWord(cal_data_address);
-    ptr_analog_input->calibration_external_scale  = ETMCanEEPromReadWord(cal_data_address+1);    
-  }
+void EnableHVLambda(void) {
+  // Set the enable register in the DAC structure
+  // The next time the DAC is updated it will be updated with the most recent high/low energy values
+  global_data_A36444.analog_output_high_energy_vprog.enabled = 1;
+  global_data_A36444.analog_output_low_energy_vprog.enabled = 1;
+  
+  // Set digital output to inhibit the lambda
+  PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;
+  
+  // Set digital output to enable HV_ON of the lambda
+  PIN_LAMBDA_ENABLE = OLL_ENABLE_LAMBDA;
 }
 
-void ETMCanReadCalibrationAnalogOutput(AnalogOutput* ptr_analog_output, unsigned char output_channel) {
-  unsigned int cal_data_address;
-  if (output_channel == 0xFF) {
-    // this is a special case, set the calibration to gain of 1 and offset of zero
-    ptr_analog_output->calibration_internal_scale = MACRO_DEC_TO_CAL_FACTOR_2(1);
-    ptr_analog_output->calibration_internal_offset = 0;
-    ptr_analog_output->calibration_external_scale = MACRO_DEC_TO_CAL_FACTOR_2(1);
-    ptr_analog_output->calibration_external_offset = 0;
-  } else {
-    // load the adc internal calibration data 
-    cal_data_address = CALIBRATION_DATA_START_REGISTER + 0x40 + output_channel*2;
-    ptr_analog_output->calibration_internal_offset = ETMCanEEPromReadWord(cal_data_address);
-    ptr_analog_output->calibration_internal_scale  = ETMCanEEPromReadWord(cal_data_address+1);
-    // load_the adc external calibration data
-    cal_data_address = CALIBRATION_DATA_START_REGISTER + 0x60 + output_channel*2;
-    ptr_analog_output->calibration_external_offset = ETMCanEEPromReadWord(cal_data_address);
-    ptr_analog_output->calibration_external_scale  = ETMCanEEPromReadWord(cal_data_address+1);    
-  }
+
+void DisableHVLambda(void) {
+  // Clear the enable register in the DAC structure
+  // The next time the DAC is updated it will be updated with the "disabled" value
+  global_data_A36444.analog_output_high_energy_vprog.enabled = 0;
+  global_data_A36444.analog_output_low_energy_vprog.enabled = 0;
+  
+  // Set digital output to inhibit the lambda
+  PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;
+  
+  // Set digital output to disable HV_ON of the lambda
+  PIN_LAMBDA_ENABLE = !OLL_ENABLE_LAMBDA;
 }
 
-unsigned int ETMCanEEPromReadWord(unsigned int register_address) {
 
-#ifdef __EEPROM_INTERNAL
-  //
-#endif
-
-
-#ifdef __EEPROM_EXTERNAL_FLASH
-  ETMEEPromReadWord(&U3_M24LC64F, register_address);
-#endif
-
-
-#ifdef __EEPROM_EXTERNAL_FRAM
-  //ETMEEPromReadWord(EXTERNAL_EEPROM_POINTER, register_address);
-#endif
-
-  return 0;
-}

@@ -806,7 +806,7 @@ void __attribute__((interrupt, no_auto_psv)) _CXInterrupt(void) {
       etm_can_can_status.can_status_rx_0_filt_0++;
       // It is a Next Pulse Level Command
       ETMCanRXMessage(&can_message, &CXRX0CON);
-      etm_can_next_pulse_level = can_message.word2;
+      etm_can_next_pulse_level = can_message.word2;  // DPARKER need to execute code to make changes as required for high/low energy mode
       etm_can_next_pulse_count = can_message.word3;
     } else {
       // The commmand was received by Filter 1
