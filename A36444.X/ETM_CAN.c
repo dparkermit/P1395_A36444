@@ -1,11 +1,8 @@
 #include "ETM_CAN.h"
 #include "ETM_CAN_FIRMWARE_VERSION.h"
+#include "p30fxxxx.h"
 
 void ETMCanCheckForStatusChange(void);
-
-
-
-
 
 
 // Public Buffers
@@ -803,14 +800,14 @@ void ETMCanInitialize(void) {
   _T3IE = 0;
   T3CONbits.TON = 1;
 
-  // DPARKER read configuration from on chip FLASH!!!  // This will be set when the device is programmed as soon as I figure out how to do that.
-  // DPARKER add this to chip memory
-  etm_can_my_configuration.agile_number_high_word = 0;
-  etm_can_my_configuration.agile_number_low_word  = 36224;
-  etm_can_my_configuration.agile_dash             = 500;
-  etm_can_my_configuration.agile_rev_ascii        = 'A';
-  etm_can_my_configuration.serial_number          = 201;
-  
+
+  etm_can_my_configuration.agile_number_high_word = ETM_CAN_AGILE_ID_HIGH;
+  etm_can_my_configuration.agile_number_low_word  = ETM_CAN_AGILE_ID_LOW;
+  etm_can_my_configuration.agile_dash             = ETM_CAN_AGILE_DASH;
+  etm_can_my_configuration.agile_rev_ascii        = ETM_CAN_AGILE_REV;
+  etm_can_my_configuration.serial_number          = ETM_CAN_SERIAL_NUMBER;
+
+
   // Firmware version data should be stored in the H File ETM_CAN_FIRMWARE_VERSION
   etm_can_my_configuration.firmware_major_rev     = FIRMWARE_AGILE_REV;
   etm_can_my_configuration.firmware_branch        = FIRMWARE_BRANCH;
@@ -1134,8 +1131,9 @@ void ETMCanProcessLogData(void) {
 	  break;
 
 	case ETM_CAN_DATA_LOG_REGISTER_HV_LAMBDA_SLOW_SET_POINT:
-	  etm_can_hv_lamdba_mirror.hvlambda_readback_high_energy_set_point = next_message.word2;
-	  etm_can_hv_lamdba_mirror.hvlambda_readback_low_energy_set_point = next_message.word1;
+	  etm_can_hv_lamdba_mirror.hvlambda_eoc_not_reached_count = next_message.word3;
+	  etm_can_hv_lamdba_mirror.hvlambda_readback_vmon = next_message.word2;
+	  etm_can_hv_lamdba_mirror.hvlambda_readback_imon = next_message.word1;
 	  etm_can_hv_lamdba_mirror.hvlambda_readback_base_plate_temp = next_message.word0;
 	  break;
 

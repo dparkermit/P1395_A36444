@@ -119,6 +119,14 @@ void DoA36444(void) {
     // 10ms Timer has expired so this code will execute once every 10ms
     _T5IF = 0;
     
+
+    etm_can_system_debug_data.debug_0 = global_data_A36444.analog_output_high_energy_vprog.set_point;
+    etm_can_system_debug_data.debug_1 = global_data_A36444.analog_output_low_energy_vprog.set_point;
+
+    etm_can_system_debug_data.debug_2 = 1010;
+    etm_can_system_debug_data.debug_3 = 2020;
+    
+
     
     // Flash the operate LED
     global_data_A36444.led_divider++;
@@ -196,6 +204,8 @@ void DoA36444(void) {
     }
     
     // Update the HV Lambda Program Values
+    ETMAnalogScaleCalibrateDACSetting(&global_data_A36444.analog_output_high_energy_vprog);
+    ETMAnalogScaleCalibrateDACSetting(&global_data_A36444.analog_output_low_energy_vprog);
     WriteLTC265XTwoChannels(&U14_LTC2654,
 			    LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A36444.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
 			    LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A36444.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
@@ -206,7 +216,7 @@ void DoA36444(void) {
       WriteLTC265XTwoChannels(&U14_LTC2654,
 			      LTC265X_WRITE_AND_UPDATE_DAC_A, global_data_A36444.analog_output_spare.dac_setting_scaled_and_calibrated,
 			      LTC265X_WRITE_AND_UPDATE_DAC_B, global_data_A36444.analog_output_adc_test.dac_setting_scaled_and_calibrated);
-    }
+    } 
   }
 }
 

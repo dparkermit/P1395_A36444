@@ -34,6 +34,7 @@ void ETMCanSetValueBoardSpecific(ETMCanMessage* message_ptr) {
   case ETM_CAN_REGISTER_HV_LAMBDA_SET_1_LAMBDA_SET_POINT:
     ETMAnalogSetOutput(&global_data_A36444.analog_output_high_energy_vprog, message_ptr->word1); 
     ETMAnalogSetOutput(&global_data_A36444.analog_output_low_energy_vprog,message_ptr->word2);
+    ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_WAITING_INITIAL_CONFIG);
     break;
 #endif
 
@@ -69,13 +70,13 @@ void ETMCanExecuteCMDBoardSpecific(ETMCanMessage* message_ptr) {
     
     
     
-#ifdef __A_WHATEVER_HV_LAMBDA_IS
+#ifdef __A36444
     case ETM_CAN_REGISTER_HV_LAMBDA_CMD_HV_ON:
-      etm_can_status_register.status_word_1 = 0x0000;
+      ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE); 
       break;
       
     case ETM_CAN_REGISTER_HV_LAMBDA_CMD_HV_OFF:
-      etm_can_status_register.status_word_1 = 0xFFFF;
+      ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE);
       break;
 #endif
       

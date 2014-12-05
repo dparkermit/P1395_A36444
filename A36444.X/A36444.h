@@ -254,8 +254,11 @@
 
 
 // -------------------- FAULT CONFIGURATION -------------------------------------- //
-#define A36444_INHIBIT_MASK        0b0001011000000100  
-#define A36444_FAULT_MASK          0b0000000000000011  
+#define A36444_INHIBIT_MASK        0b0000000000000000  
+#define A36444_FAULT_MASK          0b0000000000000000  
+
+//#define A36444_INHIBIT_MASK        0b0001011000000100  
+//#define A36444_FAULT_MASK          0b0000000000000011  
 
 
 
