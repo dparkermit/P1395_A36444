@@ -1,5 +1,5 @@
-#ifndef __A36507_H
-#define __A36507_H
+#ifndef __A36444_H
+#define __A36444_H
 
 #include <p30f6014a.h>
 #include <libpic30.h>
@@ -7,7 +7,7 @@
 #include <timer.h>
 #include "ETM_CAN_PUBLIC.h"
 #include "ETM_ANALOG.h"
-
+#include "A36444_SETTINGS.h"
 
 
 /*
@@ -213,8 +213,8 @@
 */
     
 #define T1CON_VALUE                    (T1_OFF & T1_IDLE_CON & T1_GATE_OFF & T1_PS_1_8 & T1_SOURCE_INT)
-#define TMR1_DELAY_HOLDOFF_US          52        // 52uS
-#define TMR1_LAMBDA_CHARGE_TIME_US     2400      // 2.400ms
+#define TMR1_DELAY_HOLDOFF_US          LAMBDA_HOLDOFF_TIME_US
+#define TMR1_LAMBDA_CHARGE_TIME_US     LAMBA_MAX_CHARGE_TIME
 #define TMR1_DELAY_HOLDOFF             (FCY_CLK_MHZ*TMR1_DELAY_HOLDOFF_US/8)    
 #define TMR1_LAMBDA_CHARGE_PERIOD      (FCY_CLK_MHZ*TMR1_LAMBDA_CHARGE_TIME_US/8)
 
@@ -254,11 +254,11 @@
 
 
 // -------------------- FAULT CONFIGURATION -------------------------------------- //
-#define A36444_INHIBIT_MASK        0b0000000000000000  
-#define A36444_FAULT_MASK          0b0000000000000000  
-
 //#define A36444_INHIBIT_MASK        0b0001011000000100  
 //#define A36444_FAULT_MASK          0b0000000000000011  
+
+#define A36444_INHIBIT_MASK        0b0000001000000100  // Testing only
+#define A36444_FAULT_MASK          0b0000000000000011  // Testing only
 
 
 
@@ -295,13 +295,12 @@ typedef struct {
 extern LambdaControlData global_data_A36444;
 
 
-
+// State Definitions
 #define STATE_STARTUP                0x10
 #define STATE_WAITING_FOR_CONFIG     0x20
 #define STATE_STANDBY                0x30
 #define STATE_OPERATE                0x40
 #define STATE_FAULT                  0x50
-
 
 
 #endif

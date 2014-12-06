@@ -33,7 +33,6 @@ int main(void) {
 }
 
 
-
 void DoStateMachine(void) {
   switch (global_data_A36444.control_state) {
     
@@ -116,30 +115,11 @@ void DoStateMachine(void) {
 void DoA36444(void) {
   
   if (_T5IF) {
-    // 10ms Timer has expired so this code will execute once every 10ms
+    // Timer has expired so execute the scheduled code (should be once every 10ms unless the configuration file is changes
     _T5IF = 0;
     
 
-    etm_can_system_debug_data.debug_0 = global_data_A36444.analog_output_high_energy_vprog.set_point;
-    etm_can_system_debug_data.debug_1 = global_data_A36444.analog_output_low_energy_vprog.set_point;
-
-    etm_can_system_debug_data.debug_2 = 1010;
-    etm_can_system_debug_data.debug_3 = 2020;
-    
-
-    
-    // Flash the operate LED
-    global_data_A36444.led_divider++;
-    if (global_data_A36444.led_divider >= 50) {
-      global_data_A36444.led_divider = 0;
-      if (PIN_LED_OPERATIONAL_GREEN) {
-	PIN_LED_OPERATIONAL_GREEN = 0;
-      } else {
-	PIN_LED_OPERATIONAL_GREEN = 1;
-      }
-    }
-
-    // Set the fault LED
+    // If the system is faulted or inhibited set the red LED
     if (etm_can_status_register.status_word_0 & 0x0003) {
       // The board is faulted or inhibiting the system
       PIN_LED_A_RED = OLL_LED_ON;
@@ -167,6 +147,12 @@ void DoA36444(void) {
     }
 
 
+    if (global_reset_faults) {
+      etm_can_system_debug_data.debug_0++;
+      etm_can_status_register.status_word_1 = 0x0000;
+      global_reset_faults = 0;
+    }
+        
     // Update the digital input fault pins
     if (PIN_LAMBDA_SUM_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
       ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_SUM_FAULT);
@@ -209,14 +195,22 @@ void DoA36444(void) {
     WriteLTC265XTwoChannels(&U14_LTC2654,
 			    LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A36444.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
 			    LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A36444.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
-
+    
     if (global_data_A36444.control_state != STATE_OPERATE) {
       // Update the spare analog output and the DAC test output
       // DPARKER probably need to remove this
       WriteLTC265XTwoChannels(&U14_LTC2654,
 			      LTC265X_WRITE_AND_UPDATE_DAC_A, global_data_A36444.analog_output_spare.dac_setting_scaled_and_calibrated,
 			      LTC265X_WRITE_AND_UPDATE_DAC_B, global_data_A36444.analog_output_adc_test.dac_setting_scaled_and_calibrated);
-    } 
+      
+    }
+    
+    etm_can_system_debug_data.debug_1 = global_data_A36444.analog_output_high_energy_vprog.set_point;
+    etm_can_system_debug_data.debug_2 = global_data_A36444.analog_output_low_energy_vprog.set_point;
+    
+    etm_can_system_debug_data.debug_3 = 1010;
+    etm_can_system_debug_data.debug_4 = 2020;
+    
   }
 }
 
@@ -224,13 +218,17 @@ void DoA36444(void) {
 void InitializeA36444(void) {
   unsigned int n;
 
+
   // Initialize the status register and load the inhibit and fault masks
   etm_can_status_register.status_word_0 = 0x0000;
   etm_can_status_register.status_word_1 = 0x0000;
   etm_can_status_register.data_word_A = 0x0000;
-  etm_can_status_register.data_word_B = 0x0000; 
+  etm_can_status_register.data_word_B = 0x0000;
   etm_can_status_register.status_word_0_inhbit_mask = A36444_INHIBIT_MASK;
   etm_can_status_register.status_word_1_fault_mask  = A36444_FAULT_MASK;
+  ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_WAITING_INITIAL_CONFIG);
+  ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE);  
+
 
 
   // Configure Inhibit Interrupt
@@ -251,23 +249,42 @@ void InitializeA36444(void) {
   TRISF = A36444_TRISF_VALUE;
   TRISG = A36444_TRISG_VALUE;
 
-
-
   // Flash LEDs at Startup
+  PIN_LED_OPERATIONAL_GREEN = !OLL_LED_ON;
+  PIN_LED_A_RED = !OLL_LED_ON;
+  PIN_LED_B_GREEN = !OLL_LED_ON;
+  
+
   for (n = 0; n < 5; n++) {
     PIN_LED_OPERATIONAL_GREEN = OLL_LED_ON;
-    __delay32(1000000);
+    __delay32(600000);
     ClrWdt();
-    PIN_LED_OPERATIONAL_GREEN = !OLL_LED_ON;
+
     PIN_LED_A_RED             = OLL_LED_ON;
-    __delay32(1000000);
+    __delay32(600000);
     ClrWdt();
-    PIN_LED_A_RED             = !OLL_LED_ON;
+
     PIN_LED_B_GREEN           = OLL_LED_ON;
-    __delay32(1000000);
+    __delay32(600000);
     ClrWdt();
+
     PIN_LED_B_GREEN           = !OLL_LED_ON;
+    __delay32(600000);
+    ClrWdt();
+
+    PIN_LED_A_RED             = !OLL_LED_ON;
+    __delay32(600000);
+    ClrWdt();
+
+    PIN_LED_OPERATIONAL_GREEN = !OLL_LED_ON;
+    __delay32(600000);
+    ClrWdt();
+
   }
+
+
+
+
 
   // Initialize TMR1
   TMR1  = 0;
@@ -311,15 +328,7 @@ void InitializeA36444(void) {
   ETMCanInitialize();
 
 
-  // LOAD Scaling and Calibration data for analog Inputs and outputs
-  // Fixed values are generate from spreadsheet.
-  // Calibration Data is read from EEProm
-
-#define LAMBDA_HEATSINK_OVER_TEMP      57000       //57 Deg C
-#define TRIP_COUNTER_100mS             10
-#define TRIP_COUNTER_1Sec              100
-
-  
+  // Initialize the Analog input data structures
   ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_vmon, MACRO_DEC_TO_SCALE_FACTOR_16(.28125), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
 			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
   
@@ -344,10 +353,9 @@ void InitializeA36444(void) {
   ETMAnalogInitializeInput(&global_data_A36444.analog_input_pic_adc_test_dac, MACRO_DEC_TO_SCALE_FACTOR_16(1), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
 			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
 
-#define HV_LAMBDA_MAX_VPROG            18000
-#define HV_LAMBDA_MIN_VPROG            6000
-#define HV_LAMBDA_DAC_ZERO_OUTPUT      0x0000
 
+
+  // Initialize the Analog Output Data Structures
   ETMAnalogInitializeOutput(&global_data_A36444.analog_output_high_energy_vprog, MACRO_DEC_TO_SCALE_FACTOR_16(2.96296), OFFSET_ZERO, ANALOG_OUTPUT_NO_CALIBRATION,
 			    HV_LAMBDA_MAX_VPROG, HV_LAMBDA_MIN_VPROG, HV_LAMBDA_DAC_ZERO_OUTPUT);
 
@@ -360,6 +368,8 @@ void InitializeA36444(void) {
   ETMAnalogInitializeOutput(&global_data_A36444.analog_output_adc_test, MACRO_DEC_TO_SCALE_FACTOR_16(1), OFFSET_ZERO, ANALOG_OUTPUT_NO_CALIBRATION,
 			    0xFFFF, 0, 0);
 
+
+  
 }
 
 
