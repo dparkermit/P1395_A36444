@@ -1,4 +1,5 @@
 #include "A36444.h"
+#include "FIRMWARE_VERSION.h"
 #include "ETM_EEPROM.h"
 #include "LTC265X.h"
 
@@ -229,6 +230,9 @@ void InitializeA36444(void) {
   ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_WAITING_INITIAL_CONFIG);
   ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE);  
 
+  etm_can_my_configuration.firmware_major_rev = FIRMWARE_AGILE_REV;
+  etm_can_my_configuration.firmware_branch = FIRMWARE_BRANCH;
+  etm_can_my_configuration.firmware_minor_rev = FIRMWARE_MINOR_REV;
 
 
   // Configure Inhibit Interrupt

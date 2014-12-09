@@ -1,6 +1,7 @@
 #ifndef __A36444_H
 #define __A36444_H
 
+#define __A36444
 #include <p30f6014a.h>
 #include <libpic30.h>
 #include <adc12.h>
