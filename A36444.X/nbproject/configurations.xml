@@ -4,7 +4,6 @@
     <logicalFolder name="HeaderFiles"
                    displayName="Header Files"
                    projectFiles="true">
-      <itemPath>C:/Users/dparker/Documents/GitHub/P1395_A36444/A36444.X/A36444.h</itemPath>
       <itemPath>A36444_SETTINGS.h</itemPath>
       <itemPath>FIRMWARE_VERSION.h</itemPath>
       <itemPath>../../P1395_Modules/ETM_EEPROM.h</itemPath>
@@ -17,6 +16,7 @@
       <itemPath>../../P1395_Modules/ETM_IO_PORTS.h</itemPath>
       <itemPath>../../P1395_Modules/ETM_SCALE.h</itemPath>
       <itemPath>../../P1395_Modules/ETM_SPI.h</itemPath>
+      <itemPath>A36444.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -25,7 +25,6 @@
     <logicalFolder name="SourceFiles"
                    displayName="Source Files"
                    projectFiles="true">
-      <itemPath>C:/Users/dparker/Documents/GitHub/P1395_A36444/A36444.X/A36444.c</itemPath>
       <itemPath>../../P1395_Modules/ETM_ANALOG.c</itemPath>
       <itemPath>../../P1395_Modules/ETM_CAN.c</itemPath>
       <itemPath>../../P1395_Modules/ETM_CAN_USER_CONFIG.c</itemPath>
@@ -36,6 +35,7 @@
       <itemPath>../../P1395_Modules/ETM_CAN_UTILITY.s</itemPath>
       <itemPath>../../P1395_Modules/ETM_IO_PORTS.s</itemPath>
       <itemPath>../../P1395_Modules/ETM_SCALE.s</itemPath>
+      <itemPath>A36444.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
