@@ -20,4 +20,8 @@
 #define LAMBDA_MAX_CHARGE_TIME_US      2400      // 2.4mS
 
 
+#define HV_ON_LAMBDA_SET_POINT_REFRESH_RATE_WHEN_NOT_PULSING            200             // 2 seconds
+
+
+
 #endif

@@ -164,8 +164,8 @@
 
 #define OLL_LED_ON                            0
 #define OLL_SELECT_HIGH_ENERGY_MODE           1
-#define OLL_INHIBIT_LAMBDA                    1
-#define OLL_ENABLE_LAMBDA                     1
+#define OLL_INHIBIT_LAMBDA                    0
+#define OLL_ENABLE_LAMBDA                     0
 
 
 // ------------------------ CONFIGURE ADC MODULE ------------------- //
@@ -204,7 +204,7 @@
 #define ADPCFG_SETTING          (ENABLE_AN3_ANA & ENABLE_AN4_ANA & ENABLE_AN5_ANA & ENABLE_AN6_ANA & ENABLE_AN12_ANA & ENABLE_AN13_ANA & ENABLE_AN14_ANA & ENABLE_AN15_ANA)
 #define ADCSSL_SETTING_SCAN_ALL (SCAN_ALL)
 #define ADCSSL_SETTING_STARTUP  (SKIP_SCAN_AN3 & SKIP_SCAN_AN5 & SKIP_SCAN_AN5 & SKIP_SCAN_AN6)
-#define ADCSSL_SETTING_OPERATE  (SKIP_SCAN_AN12 & SKIP_SCAN_AN13 & SKIP_SCAN_AN14 & SKIP_SCAN_AN15)
+#define ADCSSL_SETTING_OPERATE  (SKIP_SCAN_AN0 & SKIP_SCAN_AN1 & SKIP_SCAN_AN2 & SKIP_SCAN_AN7 & SKIP_SCAN_AN8 & SKIP_SCAN_AN9 & SKIP_SCAN_AN10 & SKIP_SCAN_AN11)
 
 
 /* 
@@ -215,7 +215,7 @@
     
 #define T1CON_VALUE                    (T1_OFF & T1_IDLE_CON & T1_GATE_OFF & T1_PS_1_8 & T1_SOURCE_INT)
 #define TMR1_DELAY_HOLDOFF_US          LAMBDA_HOLDOFF_TIME_US
-#define TMR1_LAMBDA_CHARGE_TIME_US     LAMBA_MAX_CHARGE_TIME
+#define TMR1_LAMBDA_CHARGE_TIME_US     LAMBDA_MAX_CHARGE_TIME_US
 #define TMR1_DELAY_HOLDOFF             (FCY_CLK_MHZ*TMR1_DELAY_HOLDOFF_US/8)    
 #define TMR1_LAMBDA_CHARGE_PERIOD      (FCY_CLK_MHZ*TMR1_LAMBDA_CHARGE_TIME_US/8)
 
@@ -290,6 +290,10 @@ typedef struct {
   unsigned int eoc_not_reached_count;
   unsigned int control_state;
   unsigned int led_divider;
+  unsigned int run_post_pulse_process;
+  unsigned int no_pulse_counter;
+  unsigned int pulse_counter;
+  
 
 } LambdaControlData;
 
@@ -303,5 +307,8 @@ extern LambdaControlData global_data_A36444;
 #define STATE_OPERATE                0x40
 #define STATE_FAULT                  0x50
 
+
+
+#define DELAY_TCY_5US                FCY_CLK_MHZ*5
 
 #endif
