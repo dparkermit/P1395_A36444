@@ -297,6 +297,9 @@ typedef struct {
   unsigned int pulse_counter;
   unsigned int post_pulse_did_not_run_counter;
   unsigned int charge_period_error_counter;
+  unsigned int power_up_timer;
+  unsigned int fault_active;
+  
 
 } LambdaControlData;
 
@@ -306,12 +309,31 @@ extern LambdaControlData global_data_A36444;
 // State Definitions
 #define STATE_STARTUP                0x10
 #define STATE_WAITING_FOR_CONFIG     0x20
-#define STATE_STANDBY                0x30
-#define STATE_OPERATE                0x40
-#define STATE_FAULT                  0x50
+//#define STATE_STANDBY                0x30
+#define STATE_OPERATE                0x50
+#define STATE_FAULT                  0x60
 
-
+#define STATE_WAITING_FOR_POWER      0x30
+#define STATE_POWER_UP               0x40
 
 #define DELAY_TCY_5US                FCY_CLK_MHZ*5
+
+
+
+#define _STATUS_LAMBDA_AT_EOC                           _STATUS_0
+#define _STATUS_LAMBDA_HIGH_ENERGY                      _STATUS_1
+
+
+#define _FAULT_LAMBDA_SUM_FAULT                         _FAULT_0
+#define _FAULT_LAMBDA_NOT_POWERED                       _FAULT_1
+#define _FAULT_LAMBDA_READBACK_HV_OFF                   _FAULT_2
+#define _FAULT_LAMBDA_PHASE_LOSS                        _FAULT_3
+#define _FAULT_LAMBDA_OVER_TEMP                         _FAULT_4
+#define _FAULT_LAMBDA_INTERLOCK                         _FAULT_5
+#define _FAULT_LAMBDA_LOAD_FLT                          _FAULT_6
+#define _FAULT_POWER_UP_TIMEOUT                         _FAULT_7
+
+
+
 
 #endif

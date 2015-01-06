@@ -35,56 +35,81 @@ int main(void) {
 }
 
 
+
+#define TIME_POWER_UP_TEST 1000 // 10 Seconds
+
 void DoStateMachine(void) {
   switch (global_data_A36444.control_state) {
     
   case STATE_STARTUP:
     InitializeA36444();
+    DisableHVLambda();
+    _CONTROL_NOT_CONFIGURED = 1;
+    _CONTROL_NOT_READY = 1;
     global_data_A36444.control_state = STATE_WAITING_FOR_CONFIG;
     break;
+
     
   case STATE_WAITING_FOR_CONFIG:
-    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_WAITING_INITIAL_CONFIG);
-    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE);
-    DisableHVLambda();  
+    DisableHVLambda();
+    _CONTROL_NOT_READY = 1;
     while (global_data_A36444.control_state == STATE_WAITING_FOR_CONFIG) {
       DoA36444();
       ETMCanDoCan();
-      
-      if (!ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_BOARD_WAITING_INITIAL_CONFIG)) {
-	global_data_A36444.control_state = STATE_STANDBY;
-      }
-      
-      if (ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SUM_FAULT)) {
-	global_data_A36444.control_state = STATE_FAULT;
+
+      if (_CONTROL_NOT_CONFIGURED == 0) {
+	global_data_A36444.control_state = STATE_WAITING_FOR_POWER;
       }
     }
     break;
 
-  case STATE_STANDBY:
-    DisableHVLambda();  
-    while (global_data_A36444.control_state == STATE_STANDBY) {
+
+  case STATE_WAITING_FOR_POWER:
+    DisableHVLambda();
+    _CONTROL_NOT_READY = 1;
+    while (global_data_A36444.control_state == STATE_WAITING_FOR_POWER) {
       DoA36444();
       ETMCanDoCan();
       
-      if (!ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE)) {
-	global_data_A36444.control_state = STATE_OPERATE;
-      }
-      
-      if (ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SUM_FAULT)) {
-	global_data_A36444.control_state = STATE_FAULT;
+      if (PIN_LAMBDA_NOT_POWERED != ILL_LAMBDA_NOT_POWERED) {
+	global_data_A36444.control_state = STATE_POWER_UP;
       }
     }
     break;
 
-  case STATE_OPERATE:
+
+  case STATE_POWER_UP:
+    EnableHVLambda();
+    global_data_A36444.power_up_timer = 0;
     global_data_A36444.pulse_counter = 0;
     global_data_A36444.post_pulse_did_not_run_counter = 0;
     global_data_A36444.charge_period_error_counter = 0;
-    EnableHVLambda(); 
+    _CONTROL_NOT_READY = 1;
+    while (global_data_A36444.control_state == STATE_POWER_UP) {
+      DoA36444();
+      ETMCanDoCan();
+
+      if (_STATUS_LAMBDA_AT_EOC) {
+	global_data_A36444.control_state = STATE_OPERATE;
+      }
+      
+      if (global_data_A36444.fault_active) {
+	global_data_A36444.control_state = STATE_FAULT;
+      }
+    }
+    break;
+    
+
+  case STATE_OPERATE:
+    _FAULT_REGISTER = 0;
+    _CONTROL_NOT_READY = 0;
     while (global_data_A36444.control_state == STATE_OPERATE) {
       DoA36444();
       ETMCanDoCan();
+      
+      if (global_data_A36444.fault_active) {
+	global_data_A36444.control_state = STATE_FAULT;
+      }
       
       if (global_data_A36444.run_post_pulse_process) {
 	// Run this once after each pulse
@@ -100,36 +125,28 @@ void DoStateMachine(void) {
 	global_data_A36444.no_pulse_counter = 0;
 	global_data_A36444.run_post_pulse_process = 0;
       }
-      
-      
-      if (ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE)) {
-	global_data_A36444.control_state = STATE_STANDBY;
-      }
-      
-      if (ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SUM_FAULT)) {
-	global_data_A36444.control_state = STATE_FAULT;
-      }
     }
     break;
 
-
+    
   case STATE_FAULT:
-    DisableHVLambda();  
+    DisableHVLambda();
+    _CONTROL_NOT_READY = 1;
     while (global_data_A36444.control_state == STATE_FAULT) {
       DoA36444();
       ETMCanDoCan();
-      if (!ETMCanCheckBit(etm_can_status_register.status_word_0, STATUS_BIT_SUM_FAULT)) {
-	// The faults have been cleared
+      
+      if (PIN_LAMBDA_NOT_POWERED == ILL_LAMBDA_NOT_POWERED) {
 	global_data_A36444.control_state = STATE_WAITING_FOR_CONFIG;
       }
     }
     break;
         
+
   default:
     global_data_A36444.control_state = STATE_FAULT;
     break;
   }
-  
 }
 
 
@@ -141,58 +158,83 @@ void DoA36444(void) {
     
 
     // If the system is faulted or inhibited set the red LED
-    if (etm_can_status_register.status_word_0 & 0x0003) {
-      // The board is faulted or inhibiting the system
+    if (_CONTROL_NOT_READY) {
       PIN_LED_A_RED = OLL_LED_ON;
     } else {
       PIN_LED_A_RED = !OLL_LED_ON;
     }
-
+    
     // Update the digital input status pins
     if (PIN_LAMBDA_EOC == ILL_LAMBDA_AT_EOC) {
-      ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_AT_EOC);
+      _STATUS_LAMBDA_AT_EOC = 1;
     } else {
-      ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_AT_EOC);
+      _STATUS_LAMBDA_AT_EOC = 0;
     }
     
-    if (PIN_LAMBDA_HV_ON_READBACK != ILL_LAMBDA_HV_ON) {
-      ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_READBACK_HV_OFF);
-    } else {
-      ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_READBACK_HV_OFF);
-    }
+    global_data_A36444.fault_active = 0;
 
-    if (PIN_LAMBDA_NOT_POWERED == ILL_LAMBDA_NOT_POWERED) {
-      ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_NOT_POWERED);
-    } else {
-      ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_LAMBDA_NOT_POWERED);
+    if (_CONTROL_CAN_FAULT) {
+      // DPARKER WHAT TO DO HERE
     }
+    
+    if ((global_data_A36444.control_state == STATE_POWER_UP) || (global_data_A36444.control_state == STATE_OPERATE)) {
+      // Check for faults from Lambda
+      if (PIN_LAMBDA_SUM_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
+	_FAULT_LAMBDA_SUM_FAULT = 1;
+	global_data_A36444.fault_active = 1;
+      }
+ 
+      if (PIN_LAMBDA_NOT_POWERED == ILL_LAMBDA_NOT_POWERED) {
+	_FAULT_LAMBDA_NOT_POWERED = 1;
+	global_data_A36444.fault_active = 1;
+      }
+      
+      if (PIN_LAMBDA_HV_ON_READBACK != ILL_LAMBDA_HV_ON) {
+	_FAULT_LAMBDA_READBACK_HV_OFF = 1;
+	global_data_A36444.fault_active = 1;
+      }
 
 
-    if (global_reset_faults) {
-      etm_can_status_register.status_word_1 = 0x0000;
-      global_reset_faults = 0;
-    }
+      if (PIN_LAMBDA_PHASE_LOSS_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
+	_FAULT_LAMBDA_PHASE_LOSS = 1;
+	global_data_A36444.fault_active = 1;
+      }
+      
+      if (PIN_LAMBDA_OVER_TEMP_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
+	_FAULT_LAMBDA_OVER_TEMP = 1;
+	global_data_A36444.fault_active = 1;
+      }
+      
+      if (PIN_LAMBDA_INTERLOCK_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
+	_FAULT_LAMBDA_INTERLOCK = 1;
+	global_data_A36444.fault_active = 1;
+      }
+      
+      if (PIN_LAMBDA_LOAD_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
+	_FAULT_LAMBDA_LOAD_FLT = 1;
+	global_data_A36444.fault_active = 1;
+      }    
 
-    // Update the digital input fault pins
-    if (PIN_LAMBDA_SUM_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
-      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_SUM_FAULT);
+      // Look for faults on the Analog inputs
+      /*
+	DPARKER REMOVED FOR NOW
+	if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_lambda_heat_sink_temp)) {
+	ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_ANALOG_TEMP_OOR);
+	}
+      */
+      
     }
-
-    if (PIN_LAMBDA_PHASE_LOSS_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
-      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_PHASE_LOSS_FAULT);
+    
+    // Check for Power Up Timeout
+    if (global_data_A36444.control_state == STATE_POWER_UP) {
+      global_data_A36444.power_up_timer++;
+      if (global_data_A36444.power_up_timer >= TIME_POWER_UP_TEST) {
+	global_data_A36444.power_up_timer = TIME_POWER_UP_TEST;
+	_FAULT_POWER_UP_TIMEOUT = 1;
+	global_data_A36444.fault_active = 1;
+      }
     }
-
-    if (PIN_LAMBDA_OVER_TEMP_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
-      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_OVER_TEMP_FAULT);
-    }
-
-    if (PIN_LAMBDA_INTERLOCK_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
-      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_INTERLOCK_FAULT);
-    }
-
-    if (PIN_LAMBDA_LOAD_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
-      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_LOAD_FAULT);
-    }
+    
 
     // Do Math on the ADC inputs
     ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_lambda_vmon);
@@ -200,21 +242,16 @@ void DoA36444(void) {
     ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_lambda_imon);
     ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_lambda_heat_sink_temp);
  
-    etm_can_system_debug_data.debug_0 = global_data_A36444.analog_input_lambda_vmon.reading_scaled_and_calibrated;
-    etm_can_system_debug_data.debug_1 = global_data_A36444.analog_input_lambda_vpeak.reading_scaled_and_calibrated;
-    etm_can_system_debug_data.debug_2 = global_data_A36444.analog_input_lambda_imon.reading_scaled_and_calibrated;
-    etm_can_system_debug_data.debug_3 = global_data_A36444.analog_input_lambda_heat_sink_temp.reading_scaled_and_calibrated;
+    local_debug_data.debug_0 = global_data_A36444.analog_input_lambda_vmon.reading_scaled_and_calibrated;
+    local_debug_data.debug_1 = global_data_A36444.analog_input_lambda_vpeak.reading_scaled_and_calibrated;
+    local_debug_data.debug_2 = global_data_A36444.analog_input_lambda_imon.reading_scaled_and_calibrated;
+    local_debug_data.debug_3 = global_data_A36444.analog_input_lambda_heat_sink_temp.reading_scaled_and_calibrated;
  
-    etm_can_system_debug_data.debug_4 = global_data_A36444.pulse_counter;
-    etm_can_system_debug_data.debug_5 = global_data_A36444.post_pulse_did_not_run_counter;
-    etm_can_system_debug_data.debug_6 = global_data_A36444.charge_period_error_counter;
-    etm_can_system_debug_data.debug_7 = global_data_A36444.analog_output_low_energy_vprog.set_point;
+    local_debug_data.debug_4 = global_data_A36444.pulse_counter;
+    local_debug_data.debug_5 = global_data_A36444.post_pulse_did_not_run_counter;
+    local_debug_data.debug_6 = global_data_A36444.charge_period_error_counter;
+    local_debug_data.debug_7 = global_data_A36444.analog_output_low_energy_vprog.set_point;
  
-
-    // Look for faults on the Analog inputs
-    if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_lambda_heat_sink_temp)) {
-      ETMCanSetBit(&etm_can_status_register.status_word_1, FAULT_LAMBDA_ANALOG_TEMP_OOR);
-    }
 
     global_data_A36444.no_pulse_counter++;
     
@@ -238,10 +275,8 @@ void DoA36444(void) {
 	WriteLTC265XTwoChannels(&U14_LTC2654,
 				LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A36444.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
 				LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A36444.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
-	
       } 
     }
-    
   }
 }
 
@@ -252,15 +287,11 @@ void InitializeA36444(void) {
   unsigned int startup_counter;
 
   // Initialize the status register and load the inhibit and fault masks
-  etm_can_status_register.status_word_0 = 0x0000;
-  etm_can_status_register.status_word_1 = 0x0000;
+  _FAULT_REGISTER = 0;
+  _CONTROL_REGISTER = 0;
   etm_can_status_register.data_word_A = 0x0000;
   etm_can_status_register.data_word_B = 0x0000;
-  etm_can_status_register.status_word_0_inhbit_mask = A36444_INHIBIT_MASK;
-  etm_can_status_register.status_word_1_fault_mask  = A36444_FAULT_MASK;
-  ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_WAITING_INITIAL_CONFIG);
-  ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_SOFTWARE_DISABLE);  
-
+  
   etm_can_my_configuration.firmware_major_rev = FIRMWARE_AGILE_REV;
   etm_can_my_configuration.firmware_branch = FIRMWARE_BRANCH;
   etm_can_my_configuration.firmware_minor_rev = FIRMWARE_MINOR_REV;
@@ -431,7 +462,7 @@ void InitializeA36444(void) {
   global_data_A36444.analog_input_neg_15v_mon.reading_scaled_and_calibrated = ETMScaleFactor16((15000 - global_data_A36444.analog_input_neg_15v_mon.reading_scaled_and_calibrated) , MACRO_DEC_TO_SCALE_FACTOR_16(2.5) ,0) - 15000;
 
   
-  ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
+  _CONTROL_SELF_CHECK_ERROR = 0;
   
 #define SELF_TEST_5V_OV             0x0001
 #define SELF_TEST_5V_UV             0x0002
@@ -445,50 +476,50 @@ void InitializeA36444(void) {
 
 
   if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_5v_mon)) {
-    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
-    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_5V_OV);
+    _CONTROL_SELF_CHECK_ERROR = 1;
+    ETMCanSetBit(&local_debug_data.self_test_result_register, SELF_TEST_5V_OV);
   }
   
   if (ETMAnalogCheckUnderAbsolute(&global_data_A36444.analog_input_5v_mon)) {
-    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
-    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_5V_UV);
+    _CONTROL_SELF_CHECK_ERROR = 1;
+    ETMCanSetBit(&local_debug_data.self_test_result_register, SELF_TEST_5V_UV);
   }
 
   if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_15v_mon)) {
-    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
-    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_15V_OV);
+    _CONTROL_SELF_CHECK_ERROR = 1;
+    ETMCanSetBit(&local_debug_data.self_test_result_register, SELF_TEST_15V_OV);
   }
   
   if (ETMAnalogCheckUnderAbsolute(&global_data_A36444.analog_input_15v_mon)) {
-    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
-    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_15V_UV);
+    _CONTROL_SELF_CHECK_ERROR = 1;
+    ETMCanSetBit(&local_debug_data.self_test_result_register, SELF_TEST_15V_UV);
   }
   
   if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_neg_15v_mon)) {
-    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
-    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_N15V_OV);
+    _CONTROL_SELF_CHECK_ERROR = 1;
+    ETMCanSetBit(&local_debug_data.self_test_result_register, SELF_TEST_N15V_OV);
   }
   
   if (ETMAnalogCheckUnderAbsolute(&global_data_A36444.analog_input_neg_15v_mon)) {
-    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
-    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_N15V_UV);
+    _CONTROL_SELF_CHECK_ERROR = 1;
+    ETMCanSetBit(&local_debug_data.self_test_result_register, SELF_TEST_N15V_UV);
   }
 
   if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_pic_adc_test_dac)) {
-    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
-    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_ADC_OV);
+    _CONTROL_SELF_CHECK_ERROR = 1;
+    ETMCanSetBit(&local_debug_data.self_test_result_register, SELF_TEST_ADC_OV);
   }
   
   if (ETMAnalogCheckUnderAbsolute(&global_data_A36444.analog_input_pic_adc_test_dac)) {
-    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
-    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_ADC_UV);
+    _CONTROL_SELF_CHECK_ERROR = 1;
+    ETMCanSetBit(&local_debug_data.self_test_result_register, SELF_TEST_ADC_UV);
   }
   
 
-  etm_can_system_debug_data.debug_C = global_data_A36444.analog_input_5v_mon.reading_scaled_and_calibrated;
-  etm_can_system_debug_data.debug_D = global_data_A36444.analog_input_15v_mon.reading_scaled_and_calibrated;
-  etm_can_system_debug_data.debug_E = global_data_A36444.analog_input_neg_15v_mon.reading_scaled_and_calibrated;
-  etm_can_system_debug_data.debug_F = global_data_A36444.analog_input_pic_adc_test_dac.reading_scaled_and_calibrated;
+  local_debug_data.debug_C = global_data_A36444.analog_input_5v_mon.reading_scaled_and_calibrated;
+  local_debug_data.debug_D = global_data_A36444.analog_input_15v_mon.reading_scaled_and_calibrated;
+  local_debug_data.debug_E = global_data_A36444.analog_input_neg_15v_mon.reading_scaled_and_calibrated;
+  local_debug_data.debug_F = global_data_A36444.analog_input_pic_adc_test_dac.reading_scaled_and_calibrated;
    
   
   // Initialize interal ADC for Normal Operation
