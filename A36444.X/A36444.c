@@ -6,7 +6,8 @@
 // This is firmware for the HV Lambda Board
 
 _FOSC(ECIO & CSW_FSCM_OFF); 
-_FWDT(WDT_ON & WDTPSA_64 & WDTPSB_8);  // 1 Second watchdog timer 
+//_FWDT(WDT_ON & WDTPSA_64 & WDTPSB_8);  // 1 Second watchdog timer 
+_FWDT(WDT_ON & WDTPSA_512 & WDTPSB_8);  // 8 Second watchdog timer 
 _FBORPOR(PWRT_OFF & BORV_45 & PBOR_OFF & MCLR_EN);
 _FBS(WR_PROTECT_BOOT_OFF & NO_BOOT_CODE & NO_BOOT_EEPROM & NO_BOOT_RAM);
 _FSS(WR_PROT_SEC_OFF & NO_SEC_CODE & NO_SEC_EEPROM & NO_SEC_RAM);
@@ -77,6 +78,9 @@ void DoStateMachine(void) {
     break;
 
   case STATE_OPERATE:
+    global_data_A36444.pulse_counter = 0;
+    global_data_A36444.post_pulse_did_not_run_counter = 0;
+    global_data_A36444.charge_period_error_counter = 0;
     EnableHVLambda(); 
     while (global_data_A36444.control_state == STATE_OPERATE) {
       DoA36444();
@@ -195,22 +199,17 @@ void DoA36444(void) {
     ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_lambda_vpeak);
     ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_lambda_imon);
     ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_lambda_heat_sink_temp);
-    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_5v_mon);
-    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_15v_mon);
-    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_neg_15v_mon);
-    ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_pic_adc_test_dac);
-
+ 
     etm_can_system_debug_data.debug_0 = global_data_A36444.analog_input_lambda_vmon.reading_scaled_and_calibrated;
     etm_can_system_debug_data.debug_1 = global_data_A36444.analog_input_lambda_vpeak.reading_scaled_and_calibrated;
     etm_can_system_debug_data.debug_2 = global_data_A36444.analog_input_lambda_imon.reading_scaled_and_calibrated;
     etm_can_system_debug_data.debug_3 = global_data_A36444.analog_input_lambda_heat_sink_temp.reading_scaled_and_calibrated;
-    etm_can_system_debug_data.debug_4 = global_data_A36444.analog_input_5v_mon.reading_scaled_and_calibrated;
-    etm_can_system_debug_data.debug_5 = global_data_A36444.analog_input_15v_mon.reading_scaled_and_calibrated;
-    etm_can_system_debug_data.debug_6 = global_data_A36444.analog_input_neg_15v_mon.reading_scaled_and_calibrated;
-    etm_can_system_debug_data.debug_7 = global_data_A36444.analog_input_pic_adc_test_dac.reading_scaled_and_calibrated;
-  
-
-    etm_can_system_debug_data.debug_8 = global_data_A36444.pulse_counter;
+ 
+    etm_can_system_debug_data.debug_4 = global_data_A36444.pulse_counter;
+    etm_can_system_debug_data.debug_5 = global_data_A36444.post_pulse_did_not_run_counter;
+    etm_can_system_debug_data.debug_6 = global_data_A36444.charge_period_error_counter;
+    etm_can_system_debug_data.debug_7 = global_data_A36444.analog_output_low_energy_vprog.set_point;
+ 
 
     // Look for faults on the Analog inputs
     if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_lambda_heat_sink_temp)) {
@@ -228,12 +227,6 @@ void DoA36444(void) {
 			      LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A36444.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
 
 
-      // Update the spare analog output and the DAC test output
-      // DPARKER - may need to remove this
-      WriteLTC265XTwoChannels(&U14_LTC2654,
-			      LTC265X_WRITE_AND_UPDATE_DAC_A, global_data_A36444.analog_output_spare.dac_setting_scaled_and_calibrated,
-			      LTC265X_WRITE_AND_UPDATE_DAC_B, global_data_A36444.analog_output_adc_test.dac_setting_scaled_and_calibrated);
-      
     } else {
       if (global_data_A36444.no_pulse_counter >= HV_ON_LAMBDA_SET_POINT_REFRESH_RATE_WHEN_NOT_PULSING) {
 	// A long time has passed without updating the Lambda Set points
@@ -256,8 +249,7 @@ void DoA36444(void) {
 
 
 void InitializeA36444(void) {
-  unsigned int n;
-
+  unsigned int startup_counter;
 
   // Initialize the status register and load the inhibit and fault masks
   etm_can_status_register.status_word_0 = 0x0000;
@@ -276,8 +268,7 @@ void InitializeA36444(void) {
 
   // Configure Inhibit Interrupt
   _INT3IP = 7; // This must be the highest priority interrupt
-  _INT1EP = 0; // Positive Transition
-
+  _INT3EP = 0; // Positive Transition
   
   // Configure ADC Interrupt
   _ADIP   = 6; // This needs to be higher priority than the CAN interrupt (Which defaults to 4)
@@ -294,42 +285,6 @@ void InitializeA36444(void) {
   TRISF = A36444_TRISF_VALUE;
   TRISG = A36444_TRISG_VALUE;
 
-  // Flash LEDs at Startup
-  PIN_LED_OPERATIONAL_GREEN = !OLL_LED_ON;
-  PIN_LED_A_RED = !OLL_LED_ON;
-  PIN_LED_B_GREEN = !OLL_LED_ON;
-  
-
-  for (n = 0; n < 5; n++) {
-    PIN_LED_OPERATIONAL_GREEN = OLL_LED_ON;
-    __delay32(600000);
-    ClrWdt();
-
-    PIN_LED_A_RED             = OLL_LED_ON;
-    __delay32(600000);
-    ClrWdt();
-
-    PIN_LED_B_GREEN           = OLL_LED_ON;
-    __delay32(600000);
-    ClrWdt();
-
-    PIN_LED_B_GREEN           = !OLL_LED_ON;
-    __delay32(600000);
-    ClrWdt();
-
-    PIN_LED_A_RED             = !OLL_LED_ON;
-    __delay32(600000);
-    ClrWdt();
-
-    PIN_LED_OPERATIONAL_GREEN = !OLL_LED_ON;
-    __delay32(600000);
-    ClrWdt();
-
-  }
-
-
-
-
 
   // Initialize TMR1
   TMR1  = 0;
@@ -344,22 +299,6 @@ void InitializeA36444(void) {
   _T5IF = 0;
   T5CON = T5CON_VALUE;
 
-
-  
-  
-  // Initialize interal ADC
-  // ---- Configure the dsPIC ADC Module ------------ //
-  ADCON1 = ADCON1_SETTING;             // Configure the high speed ADC module based on H file parameters
-  ADCON2 = ADCON2_SETTING;             // Configure the high speed ADC module based on H file parameters
-  ADCON3 = ADCON3_SETTING;             // Configure the high speed ADC module based on H file parameters
-  ADCHS  = ADCHS_SETTING;              // Configure the high speed ADC module based on H file parameters
-  
-  ADPCFG = ADPCFG_SETTING;             // Set which pins are analog and which are digital I/O
-  // ADCSSL = ADCSSL_SETTING_SCAN_ALL;    // Set which analog pins are scanned
-  ADCSSL = ADCSSL_SETTING_OPERATE;
-  _ADIF = 0;
-  _ADIE = 1;
-  _ADON = 1;
 
   
   // Initialize LTC DAC
@@ -387,17 +326,17 @@ void InitializeA36444(void) {
   ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_heat_sink_temp, MACRO_DEC_TO_SCALE_FACTOR_16(.78125), 10000, ANALOG_INPUT_NO_CALIBRATION,
 			   LAMBDA_HEATSINK_OVER_TEMP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, TRIP_COUNTER_1Sec);
 
-  ETMAnalogInitializeInput(&global_data_A36444.analog_input_5v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.10417), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
-			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_5v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.12500), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
+			   PWR_5V_OVER_FLT, PWR_5V_UNDER_FLT, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
 
-  ETMAnalogInitializeInput(&global_data_A36444.analog_input_15v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.26500), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
-			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_15v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.25063), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
+			   PWR_15V_OVER_FLT, PWR_15V_UNDER_FLT, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
 
-  ETMAnalogInitializeInput(&global_data_A36444.analog_input_neg_15v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.15625), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
-			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_neg_15v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.06250), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
+			   PWR_NEG_15V_OVER_FLT, PWR_NEG_15V_UNDER_FLT, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
 
   ETMAnalogInitializeInput(&global_data_A36444.analog_input_pic_adc_test_dac, MACRO_DEC_TO_SCALE_FACTOR_16(1), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
-			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+			   ADC_DAC_TEST_OVER_FLT, ADC_DAC_TEST_UNDER_FLT, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
 
 
 
@@ -414,8 +353,154 @@ void InitializeA36444(void) {
   ETMAnalogInitializeOutput(&global_data_A36444.analog_output_adc_test, MACRO_DEC_TO_SCALE_FACTOR_16(1), OFFSET_ZERO, ANALOG_OUTPUT_NO_CALIBRATION,
 			    0xFFFF, 0, 0);
 
+  ETMAnalogSetOutput(&global_data_A36444.analog_output_spare, 3000);
+  ETMAnalogSetOutput(&global_data_A36444.analog_output_adc_test, ADC_DAC_TEST_VALUE);
+
+  global_data_A36444.analog_output_spare.enabled      = 1;
+  global_data_A36444.analog_output_adc_test.enabled   = 1;
+
+  ETMAnalogScaleCalibrateDACSetting(&global_data_A36444.analog_output_spare);
+  ETMAnalogScaleCalibrateDACSetting(&global_data_A36444.analog_output_adc_test);
+
+  // Update the spare analog output and the DAC test output
+  WriteLTC265XTwoChannels(&U14_LTC2654,
+			  LTC265X_WRITE_AND_UPDATE_DAC_A, global_data_A36444.analog_output_spare.dac_setting_scaled_and_calibrated,
+			  LTC265X_WRITE_AND_UPDATE_DAC_B, global_data_A36444.analog_output_adc_test.dac_setting_scaled_and_calibrated);
+  
+  
+  
+
+  //Initialize the internal ADC for Startup Power Checks
+  // ---- Configure the dsPIC ADC Module ------------ //
+  ADCON1 = ADCON1_SETTING;             // Configure the high speed ADC module based on H file parameters
+  ADCON2 = ADCON2_SETTING;             // Configure the high speed ADC module based on H file parameters
+  ADPCFG = ADPCFG_SETTING;             // Set which pins are analog and which are digital I/O
+  ADCHS  = ADCHS_SETTING;              // Configure the high speed ADC module based on H file parameters
+
+  ADCON3 = ADCON3_SETTING_STARTUP;     // Configure the high speed ADC module based on H file parameters
+  ADCSSL = ADCSSL_SETTING_STARTUP;
+
+  _ADIF = 0;
+  _ADIE = 1;
+  _ADON = 1;
+
+
+
+  // Flash LEDs at Startup
+  startup_counter = 0;
+  while (startup_counter <= 400) {  // 4 Seconds total
+    ETMCanDoCan();
+    if (_T5IF) {
+      _T5IF =0;
+      startup_counter++;
+    } 
+    switch (((startup_counter >> 4) & 0b11)) {
+      
+    case 0:
+      PIN_LED_OPERATIONAL_GREEN = !OLL_LED_ON;
+      PIN_LED_A_RED = !OLL_LED_ON;
+      PIN_LED_B_GREEN = !OLL_LED_ON;
+      break;
+      
+    case 1:
+      PIN_LED_OPERATIONAL_GREEN = OLL_LED_ON;
+      PIN_LED_A_RED = !OLL_LED_ON;
+      PIN_LED_B_GREEN = !OLL_LED_ON;
+      break;
+      
+    case 2:
+      PIN_LED_OPERATIONAL_GREEN = OLL_LED_ON;
+      PIN_LED_A_RED = OLL_LED_ON;
+      PIN_LED_B_GREEN = !OLL_LED_ON;
+      break;
+
+    case 3:
+      PIN_LED_OPERATIONAL_GREEN = OLL_LED_ON;
+      PIN_LED_A_RED = OLL_LED_ON;
+      PIN_LED_B_GREEN = OLL_LED_ON;
+      break;
+    }
+  }
+  
+  PIN_LED_OPERATIONAL_GREEN = OLL_LED_ON;
+  
+  ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_5v_mon);
+  ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_15v_mon);
+  ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_neg_15v_mon);
+  ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_pic_adc_test_dac);
+  global_data_A36444.analog_input_neg_15v_mon.reading_scaled_and_calibrated = ETMScaleFactor16((15000 - global_data_A36444.analog_input_neg_15v_mon.reading_scaled_and_calibrated) , MACRO_DEC_TO_SCALE_FACTOR_16(2.5) ,0) - 15000;
 
   
+  ETMCanClearBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
+  
+#define SELF_TEST_5V_OV             0x0001
+#define SELF_TEST_5V_UV             0x0002
+#define SELF_TEST_15V_OV            0x0004
+#define SELF_TEST_15V_UV            0x0008
+#define SELF_TEST_N15V_OV           0x0010
+#define SELF_TEST_N15V_UV           0x0020
+#define SELF_TEST_ADC_OV            0x0040
+#define SELF_TEST_ADC_UV            0x0080
+
+
+
+  if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_5v_mon)) {
+    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
+    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_5V_OV);
+  }
+  
+  if (ETMAnalogCheckUnderAbsolute(&global_data_A36444.analog_input_5v_mon)) {
+    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
+    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_5V_UV);
+  }
+
+  if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_15v_mon)) {
+    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
+    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_15V_OV);
+  }
+  
+  if (ETMAnalogCheckUnderAbsolute(&global_data_A36444.analog_input_15v_mon)) {
+    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
+    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_15V_UV);
+  }
+  
+  if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_neg_15v_mon)) {
+    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
+    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_N15V_OV);
+  }
+  
+  if (ETMAnalogCheckUnderAbsolute(&global_data_A36444.analog_input_neg_15v_mon)) {
+    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
+    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_N15V_UV);
+  }
+
+  if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_pic_adc_test_dac)) {
+    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
+    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_ADC_OV);
+  }
+  
+  if (ETMAnalogCheckUnderAbsolute(&global_data_A36444.analog_input_pic_adc_test_dac)) {
+    ETMCanSetBit(&etm_can_status_register.status_word_0, STATUS_BIT_BOARD_SELF_CHECK_FAILED);
+    ETMCanSetBit(&etm_can_system_debug_data.self_test_result_register, SELF_TEST_ADC_UV);
+  }
+  
+
+  etm_can_system_debug_data.debug_C = global_data_A36444.analog_input_5v_mon.reading_scaled_and_calibrated;
+  etm_can_system_debug_data.debug_D = global_data_A36444.analog_input_15v_mon.reading_scaled_and_calibrated;
+  etm_can_system_debug_data.debug_E = global_data_A36444.analog_input_neg_15v_mon.reading_scaled_and_calibrated;
+  etm_can_system_debug_data.debug_F = global_data_A36444.analog_input_pic_adc_test_dac.reading_scaled_and_calibrated;
+   
+  
+  // Initialize interal ADC for Normal Operation
+  // ---- Configure the dsPIC ADC Module ------------ //
+  _ADON = 0;
+  ADCSSL = ADCSSL_SETTING_OPERATE;
+  ADCON3 = ADCON3_SETTING_OPERATE;     // Configure the high speed ADC module based on H file parameters
+  
+  _ADIF = 0;
+  _ADIE = 1;
+  _ADON = 1;
+
 }
 
 
@@ -433,6 +518,16 @@ void EnableHVLambda(void) {
   
   // Set digital output to enable HV_ON of the lambda
   PIN_LAMBDA_ENABLE = OLL_ENABLE_LAMBDA;
+
+  T1CONbits.TON = 0;
+  PR1 = (TMR1_LAMBDA_CHARGE_PERIOD - TMR1_DELAY_HOLDOFF);
+  TMR1 = 0;
+  _T1IF = 0;
+  _T1IE = 1;
+  T1CONbits.TON = 1;
+  
+  _INT3IF = 0;
+  _INT3IE = 1;  
 }
 
 
@@ -442,6 +537,8 @@ void DisableHVLambda(void) {
   global_data_A36444.analog_output_high_energy_vprog.enabled = 0;
   global_data_A36444.analog_output_low_energy_vprog.enabled = 0;
   
+  _INT3IE = 0; 
+
   // Set digital output to inhibit the lambda
   PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;
   
@@ -464,66 +561,73 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
     // Copy Data From Buffer to RAM
     if (_BUFS) {
       // read ADCBUF 0-7
-      global_data_A36444.analog_input_lambda_vmon.adc_accumulator           += ADCBUF0;
-      global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUF1;
-      global_data_A36444.analog_input_lambda_vpeak.adc_accumulator          += ADCBUF2;
-      global_data_A36444.analog_input_lambda_imon.adc_accumulator           += ADCBUF3;
-
-      global_data_A36444.analog_input_pic_adc_test_dac.adc_accumulator      += ADCBUF4;
-      global_data_A36444.analog_input_5v_mon.adc_accumulator                += ADCBUF5;
-      global_data_A36444.analog_input_15v_mon.adc_accumulator               += ADCBUF6;
-      global_data_A36444.analog_input_neg_15v_mon.adc_accumulator           += ADCBUF7;
+      if (global_data_A36444.control_state == STATE_STARTUP) {
+	global_data_A36444.analog_input_pic_adc_test_dac.adc_accumulator      += ADCBUF0 + ADCBUF4;
+	global_data_A36444.analog_input_5v_mon.adc_accumulator                += ADCBUF1 + ADCBUF5;
+	global_data_A36444.analog_input_15v_mon.adc_accumulator               += ADCBUF2 + ADCBUF6;
+	global_data_A36444.analog_input_neg_15v_mon.adc_accumulator           += ADCBUF3 + ADCBUF7;
+      } else {
+	global_data_A36444.analog_input_lambda_vmon.adc_accumulator           += ADCBUF0 + ADCBUF4;
+	global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUF1 + ADCBUF5;
+	global_data_A36444.analog_input_lambda_vpeak.adc_accumulator          += ADCBUF2 + ADCBUF6;
+	global_data_A36444.analog_input_lambda_imon.adc_accumulator           += ADCBUF3 + ADCBUF7;	
+      }
 
     } else {
       // read ADCBUF 8-15
-      global_data_A36444.analog_input_lambda_vmon.adc_accumulator           += ADCBUF8;
-      global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUF9;
-      global_data_A36444.analog_input_lambda_vpeak.adc_accumulator          += ADCBUFA;
-      global_data_A36444.analog_input_lambda_imon.adc_accumulator           += ADCBUFB;
+      if (global_data_A36444.control_state == STATE_STARTUP) {
+	global_data_A36444.analog_input_pic_adc_test_dac.adc_accumulator      += ADCBUF8 + ADCBUFC;
+	global_data_A36444.analog_input_5v_mon.adc_accumulator                += ADCBUF9 + ADCBUFD;
+	global_data_A36444.analog_input_15v_mon.adc_accumulator               += ADCBUFA + ADCBUFE;
+	global_data_A36444.analog_input_neg_15v_mon.adc_accumulator           += ADCBUFB + ADCBUFF;
+      } else {
+	global_data_A36444.analog_input_lambda_vmon.adc_accumulator           += ADCBUF8 + ADCBUFC;
+	global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUF9 + ADCBUFD;
+	global_data_A36444.analog_input_lambda_vpeak.adc_accumulator          += ADCBUFA + ADCBUFE;
+	global_data_A36444.analog_input_lambda_imon.adc_accumulator           += ADCBUFB + ADCBUFF;
+      }
 
-      global_data_A36444.analog_input_pic_adc_test_dac.adc_accumulator      += ADCBUFC;
-      global_data_A36444.analog_input_5v_mon.adc_accumulator                += ADCBUFD;
-      global_data_A36444.analog_input_15v_mon.adc_accumulator               += ADCBUFE;
-      global_data_A36444.analog_input_neg_15v_mon.adc_accumulator           += ADCBUFF;
-      
     }
     
-    global_data_A36444.accumulator_counter += 1;
+    global_data_A36444.accumulator_counter += 2;
     
     if (global_data_A36444.accumulator_counter >= 128) {
 
-      global_data_A36444.analog_input_lambda_vmon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36444.analog_input_lambda_vmon.filtered_adc_reading = global_data_A36444.analog_input_lambda_vmon.adc_accumulator;
-      global_data_A36444.analog_input_lambda_vmon.adc_accumulator = 0;
+      if (global_data_A36444.control_state == STATE_STARTUP) {
+	global_data_A36444.analog_input_pic_adc_test_dac.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+	global_data_A36444.analog_input_pic_adc_test_dac.filtered_adc_reading = global_data_A36444.analog_input_pic_adc_test_dac.adc_accumulator;
+	global_data_A36444.analog_input_pic_adc_test_dac.adc_accumulator = 0;
+	
+	global_data_A36444.analog_input_5v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+	global_data_A36444.analog_input_5v_mon.filtered_adc_reading = global_data_A36444.analog_input_5v_mon.adc_accumulator;
+	global_data_A36444.analog_input_5v_mon.adc_accumulator = 0;
+	
+	global_data_A36444.analog_input_15v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+	global_data_A36444.analog_input_15v_mon.filtered_adc_reading = global_data_A36444.analog_input_15v_mon.adc_accumulator;
+	global_data_A36444.analog_input_15v_mon.adc_accumulator = 0;
+	
+	global_data_A36444.analog_input_neg_15v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+	global_data_A36444.analog_input_neg_15v_mon.filtered_adc_reading = global_data_A36444.analog_input_neg_15v_mon.adc_accumulator;
+	global_data_A36444.analog_input_neg_15v_mon.adc_accumulator = 0;
+      
+      } else {
 
-      global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36444.analog_input_lambda_heat_sink_temp.filtered_adc_reading = global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator;
-      global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator = 0;
-
-      global_data_A36444.analog_input_lambda_vpeak.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36444.analog_input_lambda_vpeak.filtered_adc_reading = global_data_A36444.analog_input_lambda_vpeak.adc_accumulator;
-      global_data_A36444.analog_input_lambda_vpeak.adc_accumulator = 0;
-
-      global_data_A36444.analog_input_lambda_imon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36444.analog_input_lambda_imon.filtered_adc_reading = global_data_A36444.analog_input_lambda_imon.adc_accumulator;
-      global_data_A36444.analog_input_lambda_imon.adc_accumulator = 0;
-
-      global_data_A36444.analog_input_pic_adc_test_dac.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36444.analog_input_pic_adc_test_dac.filtered_adc_reading = global_data_A36444.analog_input_pic_adc_test_dac.adc_accumulator;
-      global_data_A36444.analog_input_pic_adc_test_dac.adc_accumulator = 0;
-
-      global_data_A36444.analog_input_5v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36444.analog_input_5v_mon.filtered_adc_reading = global_data_A36444.analog_input_5v_mon.adc_accumulator;
-      global_data_A36444.analog_input_5v_mon.adc_accumulator = 0;
-
-      global_data_A36444.analog_input_15v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36444.analog_input_15v_mon.filtered_adc_reading = global_data_A36444.analog_input_15v_mon.adc_accumulator;
-      global_data_A36444.analog_input_15v_mon.adc_accumulator = 0;
-
-      global_data_A36444.analog_input_neg_15v_mon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
-      global_data_A36444.analog_input_neg_15v_mon.filtered_adc_reading = global_data_A36444.analog_input_neg_15v_mon.adc_accumulator;
-      global_data_A36444.analog_input_neg_15v_mon.adc_accumulator = 0;
-
+	global_data_A36444.analog_input_lambda_vmon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+	global_data_A36444.analog_input_lambda_vmon.filtered_adc_reading = global_data_A36444.analog_input_lambda_vmon.adc_accumulator;
+	global_data_A36444.analog_input_lambda_vmon.adc_accumulator = 0;
+	
+	global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+	global_data_A36444.analog_input_lambda_heat_sink_temp.filtered_adc_reading = global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator;
+	global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator = 0;
+	
+	global_data_A36444.analog_input_lambda_vpeak.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+	global_data_A36444.analog_input_lambda_vpeak.filtered_adc_reading = global_data_A36444.analog_input_lambda_vpeak.adc_accumulator;
+	global_data_A36444.analog_input_lambda_vpeak.adc_accumulator = 0;
+	
+	global_data_A36444.analog_input_lambda_imon.adc_accumulator >>= 3;  // This is now a 16 bit number average of previous 128 samples 
+	global_data_A36444.analog_input_lambda_imon.filtered_adc_reading = global_data_A36444.analog_input_lambda_imon.adc_accumulator;
+	global_data_A36444.analog_input_lambda_imon.adc_accumulator = 0;
+      }
 
       global_data_A36444.accumulator_counter = 0;
     }
@@ -541,7 +645,7 @@ void __attribute__((interrupt, shadow, no_auto_psv)) _INT3Interrupt(void) {
     (2) After the inhibt time has passed, !Inhibit the power supply, and start the EOC timer
     (3) Set the status bit that indicates a pulse occured
   */ 
-
+  
   PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;
   
   // Setup timer1 to time the inhibit period
@@ -550,23 +654,24 @@ void __attribute__((interrupt, shadow, no_auto_psv)) _INT3Interrupt(void) {
   PR1 = TMR1_DELAY_HOLDOFF;
   T1CONbits.TON = 1;
   _T1IF = 0;
-
+  
   if (global_data_A36444.run_post_pulse_process) {
     // We never completed the post pulse process.  
     // DPARKER, Increment some error
+    global_data_A36444.post_pulse_did_not_run_counter++;
   }
   
   if (_T1IE) {
     // If timer one is enabled then we did not complete the Charge period before the next pulse
-    // DPARKER, Increment some error
+    global_data_A36444.charge_period_error_counter++;
   }
-
+  
   _T1IE = 0;
-
+  
   while(!_T1IF);                                                   // what for the holdoff time to pass
-
+  
   PIN_LAMBDA_INHIBIT = !OLL_INHIBIT_LAMBDA;
-
+  
   // Set up Timer1 to produce interupt at end of charge period
   T1CONbits.TON = 0;
   TMR1 = 0;
@@ -574,15 +679,16 @@ void __attribute__((interrupt, shadow, no_auto_psv)) _INT3Interrupt(void) {
   _T1IE = 1;
   PR1 = (TMR1_LAMBDA_CHARGE_PERIOD - TMR1_DELAY_HOLDOFF);
   T1CONbits.TON = 1;
-
-    
+  
+  
   
   
   global_data_A36444.run_post_pulse_process = 1;     // This tells the main control loop that a pulse has occured and that it should run the post pulse process once (and only once) 
   global_data_A36444.adc_ignore_current_sample = 1;  // This allows the internal ADC ISR to know that there was a pulse and to discard all the data from the sequence where the pulse occured
-
+  
   global_data_A36444.pulse_counter++;
-  _INT1IF = 0;
+  
+  _INT3IF = 0;
 }
 
 
@@ -598,7 +704,7 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   _T1IF = 0;         // Clear the interrupt flag
   _T1IE = 0;         // Disable the interrupt (This will be enabled the next time that a capacitor charging sequence starts)
   T1CONbits.TON = 0;   // Stop the timer from incrementing (Again this will be restarted with the next time the capacitor charge sequence starts)
-  
+
   if (PIN_LAMBDA_EOC != ILL_LAMBDA_AT_EOC) {
     __delay32(DELAY_TCY_5US);
     if (PIN_LAMBDA_EOC != ILL_LAMBDA_AT_EOC) {
