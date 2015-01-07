@@ -332,7 +332,7 @@ extern LambdaControlData global_data_A36444;
 #define _FAULT_LAMBDA_INTERLOCK                         _FAULT_5
 #define _FAULT_LAMBDA_LOAD_FLT                          _FAULT_6
 #define _FAULT_POWER_UP_TIMEOUT                         _FAULT_7
-
+#define _FAULT_CAN_COMMUNICATION_LATCHED                _FAULT_8
 
 
 

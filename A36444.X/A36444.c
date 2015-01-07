@@ -173,8 +173,14 @@ void DoA36444(void) {
     
     global_data_A36444.fault_active = 0;
 
-    if (_CONTROL_CAN_FAULT) {
-      // DPARKER WHAT TO DO HERE
+    if (_CONTROL_CAN_COM_LOSS) {
+      _FAULT_CAN_COMMUNICATION_LATCHED = 1;
+      global_data_A36444.fault_active = 1;
+    }
+
+    if (PIN_LAMBDA_NOT_POWERED == ILL_LAMBDA_NOT_POWERED) {
+      _FAULT_LAMBDA_NOT_POWERED = 1;
+      global_data_A36444.fault_active = 1;
     }
     
     if ((global_data_A36444.control_state == STATE_POWER_UP) || (global_data_A36444.control_state == STATE_OPERATE)) {
@@ -184,11 +190,6 @@ void DoA36444(void) {
 	global_data_A36444.fault_active = 1;
       }
  
-      if (PIN_LAMBDA_NOT_POWERED == ILL_LAMBDA_NOT_POWERED) {
-	_FAULT_LAMBDA_NOT_POWERED = 1;
-	global_data_A36444.fault_active = 1;
-      }
-      
       if (PIN_LAMBDA_HV_ON_READBACK != ILL_LAMBDA_HV_ON) {
 	_FAULT_LAMBDA_READBACK_HV_OFF = 1;
 	global_data_A36444.fault_active = 1;
@@ -252,6 +253,7 @@ void DoA36444(void) {
     local_debug_data.debug_6 = global_data_A36444.charge_period_error_counter;
     local_debug_data.debug_7 = global_data_A36444.analog_output_low_energy_vprog.set_point;
  
+    local_debug_data.debug_8 = global_data_A36444.control_state;
 
     global_data_A36444.no_pulse_counter++;
     
