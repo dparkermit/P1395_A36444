@@ -46,6 +46,7 @@ void DoStateMachine(void) {
     DisableHVLambda();
     _CONTROL_NOT_CONFIGURED = 1;
     _CONTROL_NOT_READY = 1;
+    _STATUS_STATE_FAULT = 0;
     global_data_A36444.control_state = STATE_WAITING_FOR_CONFIG;
     break;
 
@@ -53,6 +54,7 @@ void DoStateMachine(void) {
   case STATE_WAITING_FOR_CONFIG:
     DisableHVLambda();
     _CONTROL_NOT_READY = 1;
+    _STATUS_STATE_FAULT = 0;
     while (global_data_A36444.control_state == STATE_WAITING_FOR_CONFIG) {
       DoA36444();
       ETMCanDoCan();
@@ -67,6 +69,7 @@ void DoStateMachine(void) {
   case STATE_WAITING_FOR_POWER:
     DisableHVLambda();
     _CONTROL_NOT_READY = 1;
+    _STATUS_STATE_FAULT = 0;
     while (global_data_A36444.control_state == STATE_WAITING_FOR_POWER) {
       DoA36444();
       ETMCanDoCan();
@@ -80,35 +83,34 @@ void DoStateMachine(void) {
 
   case STATE_POWER_UP:
     EnableHVLambda();
-    global_data_A36444.power_up_timer = 0;
-    global_data_A36444.pulse_counter = 0;
-    global_data_A36444.post_pulse_did_not_run_counter = 0;
-    global_data_A36444.charge_period_error_counter = 0;
     _CONTROL_NOT_READY = 1;
+    _STATUS_STATE_FAULT = 0;
+    global_data_A36444.power_up_delay_counter = 0;
     while (global_data_A36444.control_state == STATE_POWER_UP) {
       DoA36444();
       ETMCanDoCan();
 
-      if (_STATUS_LAMBDA_AT_EOC) {
-	global_data_A36444.control_state = STATE_OPERATE;
-      }
-      
-      if (global_data_A36444.fault_active) {
-	global_data_A36444.control_state = STATE_FAULT;
+      if (global_data_A36444.power_up_delay_counter >= POWER_UP_DELAY) {
+	if (_STATUS_LAMBDA_AT_EOC) {
+	  global_data_A36444.control_state = STATE_OPERATE;
+	} else {
+	  global_data_A36444.control_state = STATE_FAULT_WAIT;
+	  _FAULT_POWER_UP_TIMEOUT = 1;
+	}
       }
     }
     break;
-    
 
   case STATE_OPERATE:
     _FAULT_REGISTER = 0;
     _CONTROL_NOT_READY = 0;
+    _STATUS_STATE_FAULT = 0;
     while (global_data_A36444.control_state == STATE_OPERATE) {
       DoA36444();
       ETMCanDoCan();
       
       if (global_data_A36444.fault_active) {
-	global_data_A36444.control_state = STATE_FAULT;
+	global_data_A36444.control_state = STATE_FAULT_WAIT;
       }
       
       if (global_data_A36444.run_post_pulse_process) {
@@ -121,17 +123,30 @@ void DoStateMachine(void) {
 				LTC265X_WRITE_AND_UPDATE_DAC_C, global_data_A36444.analog_output_high_energy_vprog.dac_setting_scaled_and_calibrated,
 				LTC265X_WRITE_AND_UPDATE_DAC_D, global_data_A36444.analog_output_low_energy_vprog.dac_setting_scaled_and_calibrated);
 	
-	
 	global_data_A36444.no_pulse_counter = 0;
 	global_data_A36444.run_post_pulse_process = 0;
       }
     }
     break;
 
+  case STATE_FAULT_WAIT:
+    DisableHVLambda();
+    _CONTROL_NOT_READY = 1;
+    _STATUS_STATE_FAULT = 1;
+    global_data_A36444.fault_wait_time = 0;
+    while (global_data_A36444.control_state == STATE_FAULT_WAIT) {
+      DoA36444();
+      ETMCanDoCan();
+      if (global_data_A36444.fault_wait_time >= TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS) {
+	global_data_A36444.control_state = STATE_FAULT;
+      }
+    }
+    break;
     
   case STATE_FAULT:
     DisableHVLambda();
     _CONTROL_NOT_READY = 1;
+    _STATUS_STATE_FAULT = 1;
     while (global_data_A36444.control_state == STATE_FAULT) {
       DoA36444();
       ETMCanDoCan();
@@ -164,6 +179,14 @@ void DoA36444(void) {
       PIN_LED_A_RED = !OLL_LED_ON;
     }
     
+    if (global_data_A36444.control_state == STATE_POWER_UP) {
+      global_data_A36444.power_up_delay_counter++;
+      if (global_data_A36444.power_up_delay_counter >= POWER_UP_DELAY) {
+	global_data_A36444.power_up_delay_counter = POWER_UP_DELAY;
+      }
+    }
+
+
     // Update the digital input status pins
     if (PIN_LAMBDA_EOC == ILL_LAMBDA_AT_EOC) {
       _STATUS_LAMBDA_AT_EOC = 1;
@@ -178,12 +201,26 @@ void DoA36444(void) {
       global_data_A36444.fault_active = 1;
     }
 
+    if (PIN_LAMBDA_HV_ON_READBACK != ILL_LAMBDA_HV_ON) {
+      _STATUS_LAMBDA_READBACK_HV_OFF = 1;
+    } else {
+      _STATUS_LAMBDA_READBACK_HV_OFF = 0;
+    }
+
     if (PIN_LAMBDA_NOT_POWERED == ILL_LAMBDA_NOT_POWERED) {
-      _FAULT_LAMBDA_NOT_POWERED = 1;
-      global_data_A36444.fault_active = 1;
+      _STATUS_LAMBDA_NOT_POWERED = 1;
+    } else {
+      _STATUS_LAMBDA_NOT_POWERED = 0;
     }
     
-    if ((global_data_A36444.control_state == STATE_POWER_UP) || (global_data_A36444.control_state == STATE_OPERATE)) {
+    if (global_data_A36444.control_state == STATE_FAULT_WAIT) {
+      global_data_A36444.fault_wait_time++;
+      if (global_data_A36444.fault_wait_time >= TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS) {
+	global_data_A36444.fault_wait_time = TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS;
+      }
+    }
+    
+    if ((global_data_A36444.control_state == STATE_OPERATE) || (global_data_A36444.control_state == STATE_FAULT_WAIT)) {
       // Check for faults from Lambda
       if (PIN_LAMBDA_SUM_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
 	_FAULT_LAMBDA_SUM_FAULT = 1;
@@ -194,7 +231,6 @@ void DoA36444(void) {
 	_FAULT_LAMBDA_READBACK_HV_OFF = 1;
 	global_data_A36444.fault_active = 1;
       }
-
 
       if (PIN_LAMBDA_PHASE_LOSS_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
 	_FAULT_LAMBDA_PHASE_LOSS = 1;
@@ -216,6 +252,12 @@ void DoA36444(void) {
 	global_data_A36444.fault_active = 1;
       }    
 
+      if (PIN_LAMBDA_NOT_POWERED == ILL_LAMBDA_NOT_POWERED) {
+	_FAULT_LAMBDA_NOT_POWERED = 1;
+	global_data_A36444.fault_active = 1;
+      }
+      
+
       // Look for faults on the Analog inputs
       /*
 	DPARKER REMOVED FOR NOW
@@ -225,17 +267,6 @@ void DoA36444(void) {
       */
       
     }
-    
-    // Check for Power Up Timeout
-    if (global_data_A36444.control_state == STATE_POWER_UP) {
-      global_data_A36444.power_up_timer++;
-      if (global_data_A36444.power_up_timer >= TIME_POWER_UP_TEST) {
-	global_data_A36444.power_up_timer = TIME_POWER_UP_TEST;
-	_FAULT_POWER_UP_TIMEOUT = 1;
-	global_data_A36444.fault_active = 1;
-      }
-    }
-    
 
     // Do Math on the ADC inputs
     ETMAnalogScaleCalibrateADCReading(&global_data_A36444.analog_input_lambda_vmon);
@@ -533,7 +564,6 @@ void InitializeA36444(void) {
   _ADIF = 0;
   _ADIE = 1;
   _ADON = 1;
-
 }
 
 
