@@ -496,15 +496,6 @@ void InitializeA36444(void) {
 
   
   _CONTROL_SELF_CHECK_ERROR = 0;
-  
-#define SELF_TEST_5V_OV             0x0001
-#define SELF_TEST_5V_UV             0x0002
-#define SELF_TEST_15V_OV            0x0004
-#define SELF_TEST_15V_UV            0x0008
-#define SELF_TEST_N15V_OV           0x0010
-#define SELF_TEST_N15V_UV           0x0020
-#define SELF_TEST_ADC_OV            0x0040
-#define SELF_TEST_ADC_UV            0x0080
 
 
 
