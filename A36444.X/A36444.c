@@ -3,6 +3,11 @@
 #include "ETM_EEPROM.h"
 #include "LTC265X.h"
 
+
+unsigned int dan_test_array[16] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
+unsigned int dan_test_1;
+unsigned int dan_test_2;
+
 // This is firmware for the HV Lambda Board
 
 _FOSC(ECIO & CSW_FSCM_OFF); 
@@ -90,6 +95,11 @@ void DoStateMachine(void) {
       DoA36444();
       ETMCanDoCan();
 
+
+      if (global_data_A36444.power_up_delay_counter >= POWER_UP_DELAY) {
+	global_data_A36444.control_state = STATE_POWER_TEST;
+      }
+      
       if (global_data_A36444.power_up_delay_counter >= POWER_UP_DELAY) {
 	if (_STATUS_LAMBDA_AT_EOC) {
 	  global_data_A36444.control_state = STATE_OPERATE;
@@ -99,6 +109,11 @@ void DoStateMachine(void) {
 	}
       }
     }
+    break;
+
+
+  case STATE_POWER_TEST:
+    global_data_A36444.control_state = STATE_OPERATE;
     break;
 
   case STATE_OPERATE:
@@ -375,6 +390,8 @@ void InitializeA36444(void) {
 
   // Initialize the Can module
   ETMCanInitialize();
+  ETMCanSelectExternalEEprom(&U3_M24LC64F);
+  // ETMCanSelectInternalEEprom();
 
 
   // Initialize the Analog input data structures
@@ -555,6 +572,43 @@ void InitializeA36444(void) {
   _ADIF = 0;
   _ADIE = 1;
   _ADON = 1;
+
+  ETMEEPromReadPage(&U3_M24LC64F, 0, 16, dan_test_array);
+  Nop();
+  Nop();
+  Nop();
+  Nop();
+
+  ETMEEPromReadPage(&U3_M24LC64F, 1, 16, dan_test_array);
+  Nop();
+  Nop();
+  Nop();
+  Nop();
+
+
+  ETMEEPromReadPage(&U3_M24LC64F, 2, 16, dan_test_array);
+  Nop();
+  Nop();
+  Nop();
+  Nop();
+
+
+  ETMEEPromReadPage(&U3_M24LC64F, 3, 16, dan_test_array);
+  Nop();
+  Nop();
+  Nop();
+  Nop();
+
+
+  ETMEEPromReadPage(&U3_M24LC64F, 0, 16, dan_test_array);
+  Nop();
+  Nop();
+  Nop();
+  Nop();
+
+
+  
+
 }
 
 

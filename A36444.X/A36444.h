@@ -312,6 +312,7 @@ extern LambdaControlData global_data_A36444;
 #define STATE_WAITING_FOR_CONFIG     20
 #define STATE_WAITING_FOR_POWER      30
 #define STATE_POWER_UP               40
+#define STATE_POWER_TEST             45
 #define STATE_OPERATE                50
 #define STATE_FAULT_WAIT             55
 #define STATE_FAULT                  60
