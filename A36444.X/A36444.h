@@ -1,14 +1,15 @@
 #ifndef __A36444_H
 #define __A36444_H
 
-#define __A36444
-#include <p30f6014a.h>
+#include <xc.h>
 #include <libpic30.h>
 #include <adc12.h>
 #include <timer.h>
-#include "ETM_CAN_PUBLIC.h"
-#include "ETM_ANALOG.h"
+
+#include "P1395_CAN_SLAVE_PUBLIC.h"
 #include "A36444_SETTINGS.h"
+#include "ETM_ANALOG.h"
+#include "P1395_MODULE_CONFIG.h"
 
 
 /*

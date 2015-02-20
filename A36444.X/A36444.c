@@ -1,10 +1,13 @@
 #include "A36444.h"
 #include "FIRMWARE_VERSION.h"
-#include "ETM_EEPROM.h"
 #include "LTC265X.h"
+#include "ETM_EEPROM.h"
 
 
-unsigned int dan_test_array[16] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
+
+
+
+//unsigned int dan_test_array[16] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
 unsigned int dan_test_1;
 unsigned int dan_test_2;
 
@@ -21,7 +24,6 @@ _FICD(PGD);
 
 
 LTC265X U14_LTC2654;
-ETMEEProm U3_M24LC64F;
 LambdaControlData global_data_A36444;
 
 
@@ -62,7 +64,7 @@ void DoStateMachine(void) {
     _STATUS_STATE_FAULT = 0;
     while (global_data_A36444.control_state == STATE_WAITING_FOR_CONFIG) {
       DoA36444();
-      ETMCanDoCan();
+      ETMCanSlaveDoCan();
 
       if (_CONTROL_NOT_CONFIGURED == 0) {
 	global_data_A36444.control_state = STATE_WAITING_FOR_POWER;
@@ -77,7 +79,7 @@ void DoStateMachine(void) {
     _STATUS_STATE_FAULT = 0;
     while (global_data_A36444.control_state == STATE_WAITING_FOR_POWER) {
       DoA36444();
-      ETMCanDoCan();
+      ETMCanSlaveDoCan();
       
       if (PIN_LAMBDA_NOT_POWERED != ILL_LAMBDA_NOT_POWERED) {
 	global_data_A36444.control_state = STATE_POWER_UP;
@@ -93,7 +95,7 @@ void DoStateMachine(void) {
     global_data_A36444.power_up_delay_counter = 0;
     while (global_data_A36444.control_state == STATE_POWER_UP) {
       DoA36444();
-      ETMCanDoCan();
+      ETMCanSlaveDoCan();
 
 
       if (global_data_A36444.power_up_delay_counter >= POWER_UP_DELAY) {
@@ -122,7 +124,7 @@ void DoStateMachine(void) {
     _STATUS_STATE_FAULT = 0;
     while (global_data_A36444.control_state == STATE_OPERATE) {
       DoA36444();
-      ETMCanDoCan();
+      ETMCanSlaveDoCan();
       
       if (global_data_A36444.fault_active) {
 	global_data_A36444.control_state = STATE_FAULT_WAIT;
@@ -151,7 +153,7 @@ void DoStateMachine(void) {
     global_data_A36444.fault_wait_time = 0;
     while (global_data_A36444.control_state == STATE_FAULT_WAIT) {
       DoA36444();
-      ETMCanDoCan();
+      ETMCanSlaveDoCan();
       if (global_data_A36444.fault_wait_time >= TIME_WAIT_FOR_LAMBDA_TO_SET_FAULT_OUTPUTS) {
 	global_data_A36444.control_state = STATE_FAULT;
       }
@@ -164,7 +166,7 @@ void DoStateMachine(void) {
     _STATUS_STATE_FAULT = 1;
     while (global_data_A36444.control_state == STATE_FAULT) {
       DoA36444();
-      ETMCanDoCan();
+      ETMCanSlaveDoCan();
       
       if (PIN_LAMBDA_NOT_POWERED == ILL_LAMBDA_NOT_POWERED) {
 	global_data_A36444.control_state = STATE_WAITING_FOR_CONFIG;
@@ -385,12 +387,11 @@ void InitializeA36444(void) {
 
   
   // Initialize the External EEprom
-  ETMEEPromConfigureDevice(&U3_M24LC64F, EEPROM_I2C_ADDRESS_0, I2C_PORT, EEPROM_SIZE_8K_BYTES, FCY_CLK, ETM_I2C_400K_BAUD);
-
+  ETMEEPromConfigureExternalDevice(EEPROM_SIZE_8K_BYTES, FCY_CLK, 400000, EEPROM_I2C_ADDRESS_0, 1);
 
   // Initialize the Can module
-  ETMCanInitialize();
-  ETMCanSelectExternalEEprom(&U3_M24LC64F);
+  ETMCanSlaveInitialize();
+  // DPARKER REDO THIS ETMCanSelectExternalEEprom(&U3_M24LC64F);
   // ETMCanSelectInternalEEprom();
 
 
@@ -470,7 +471,7 @@ void InitializeA36444(void) {
   // Flash LEDs at Startup
   startup_counter = 0;
   while (startup_counter <= 400) {  // 4 Seconds total
-    ETMCanDoCan();
+    ETMCanSlaveDoCan();
     if (_T5IF) {
       _T5IF =0;
       startup_counter++;
@@ -515,7 +516,7 @@ void InitializeA36444(void) {
   _CONTROL_SELF_CHECK_ERROR = 0;
 
 
-
+  /*
   if (ETMAnalogCheckOverAbsolute(&global_data_A36444.analog_input_5v_mon)) {
     _CONTROL_SELF_CHECK_ERROR = 1;
     ETMCanSetBit(&local_debug_data.self_test_result_register, SELF_TEST_5V_OV);
@@ -555,7 +556,7 @@ void InitializeA36444(void) {
     _CONTROL_SELF_CHECK_ERROR = 1;
     ETMCanSetBit(&local_debug_data.self_test_result_register, SELF_TEST_ADC_UV);
   }
-  
+  */
 
   local_debug_data.debug_C = global_data_A36444.analog_input_5v_mon.reading_scaled_and_calibrated;
   local_debug_data.debug_D = global_data_A36444.analog_input_15v_mon.reading_scaled_and_calibrated;
@@ -573,34 +574,42 @@ void InitializeA36444(void) {
   _ADIE = 1;
   _ADON = 1;
 
-  ETMEEPromReadPage(&U3_M24LC64F, 0, 16, dan_test_array);
+
+
+
+
+
+  dan_test_1 = ETMEEPromReadWord(0x133);
+  ETMEEPromWriteWord(0x133, 0x1321);
+
+  //  ETMEEPromReadPage(&U3_M24LC64F, 0, 16, dan_test_array);
   Nop();
   Nop();
   Nop();
   Nop();
 
-  ETMEEPromReadPage(&U3_M24LC64F, 1, 16, dan_test_array);
-  Nop();
-  Nop();
-  Nop();
-  Nop();
-
-
-  ETMEEPromReadPage(&U3_M24LC64F, 2, 16, dan_test_array);
-  Nop();
-  Nop();
-  Nop();
-  Nop();
-
-
-  ETMEEPromReadPage(&U3_M24LC64F, 3, 16, dan_test_array);
+  //ETMEEPromReadPage(&U3_M24LC64F, 1, 16, dan_test_array);
   Nop();
   Nop();
   Nop();
   Nop();
 
 
-  ETMEEPromReadPage(&U3_M24LC64F, 0, 16, dan_test_array);
+  //ETMEEPromReadPage(&U3_M24LC64F, 2, 16, dan_test_array);
+  Nop();
+  Nop();
+  Nop();
+  Nop();
+
+
+  //ETMEEPromReadPage(&U3_M24LC64F, 3, 16, dan_test_array);
+  Nop();
+  Nop();
+  Nop();
+  Nop();
+
+
+  //ETMEEPromReadPage(&U3_M24LC64F, 0, 16, dan_test_array);
   Nop();
   Nop();
   Nop();
