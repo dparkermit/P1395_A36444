@@ -396,44 +396,120 @@ void InitializeA36444(void) {
 
 
   // Initialize the Analog input data structures
-  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_vmon, MACRO_DEC_TO_SCALE_FACTOR_16(.28125), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
-			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_vmon,
+			   MACRO_DEC_TO_SCALE_FACTOR_16(.28125),
+			   OFFSET_ZERO,
+			   ANALOG_INPUT_3,
+			   NO_OVER_TRIP,
+			   NO_UNDER_TRIP,
+			   NO_TRIP_SCALE,
+			   NO_FLOOR,
+			   NO_COUNTER);
   
-  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_vpeak, MACRO_DEC_TO_SCALE_FACTOR_16(.28125), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION, 
-			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_vpeak,
+			   MACRO_DEC_TO_SCALE_FACTOR_16(.28125),
+			   OFFSET_ZERO,
+			   ANALOG_INPUT_5,
+			   NO_OVER_TRIP,
+			   NO_UNDER_TRIP,
+			   NO_TRIP_SCALE,
+			   NO_FLOOR,
+			   NO_COUNTER);
   
-  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_imon,  MACRO_DEC_TO_SCALE_FACTOR_16(.40179), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
-			   NO_OVER_TRIP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_imon,
+			   MACRO_DEC_TO_SCALE_FACTOR_16(.40179),
+			   OFFSET_ZERO,
+			   ANALOG_INPUT_6,
+			   NO_OVER_TRIP,
+			   NO_UNDER_TRIP,
+			   NO_TRIP_SCALE,
+			   NO_FLOOR,
+			   NO_COUNTER);
 
-  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_heat_sink_temp, MACRO_DEC_TO_SCALE_FACTOR_16(.78125), 10000, ANALOG_INPUT_NO_CALIBRATION,
-			   LAMBDA_HEATSINK_OVER_TEMP, NO_UNDER_TRIP, NO_TRIP_SCALE, NO_FLOOR, TRIP_COUNTER_1Sec);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_heat_sink_temp,
+			   MACRO_DEC_TO_SCALE_FACTOR_16(.78125),
+			   10000,
+			   ANALOG_INPUT_4,
+			   LAMBDA_HEATSINK_OVER_TEMP,
+			   NO_UNDER_TRIP,
+			   NO_TRIP_SCALE,
+			   NO_FLOOR,
+			   TRIP_COUNTER_1Sec);
 
-  ETMAnalogInitializeInput(&global_data_A36444.analog_input_5v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.12500), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
-			   PWR_5V_OVER_FLT, PWR_5V_UNDER_FLT, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_5v_mon,
+			   MACRO_DEC_TO_SCALE_FACTOR_16(.12500),
+			   OFFSET_ZERO,
+			   ANALOG_INPUT_D,
+			   PWR_5V_OVER_FLT,
+			   PWR_5V_UNDER_FLT,
+			   NO_TRIP_SCALE,
+			   NO_FLOOR,
+			   NO_COUNTER);
 
-  ETMAnalogInitializeInput(&global_data_A36444.analog_input_15v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.25063), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
-			   PWR_15V_OVER_FLT, PWR_15V_UNDER_FLT, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_15v_mon,
+			   MACRO_DEC_TO_SCALE_FACTOR_16(.25063),
+			   OFFSET_ZERO,
+			   ANALOG_INPUT_E,
+			   PWR_15V_OVER_FLT,
+			   PWR_15V_UNDER_FLT,
+			   NO_TRIP_SCALE,
+			   NO_FLOOR,
+			   NO_COUNTER);
 
-  ETMAnalogInitializeInput(&global_data_A36444.analog_input_neg_15v_mon, MACRO_DEC_TO_SCALE_FACTOR_16(.06250), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
-			   PWR_NEG_15V_OVER_FLT, PWR_NEG_15V_UNDER_FLT, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_neg_15v_mon,
+			   MACRO_DEC_TO_SCALE_FACTOR_16(.06250),
+			   OFFSET_ZERO,
+			   ANALOG_INPUT_F,
+			   PWR_NEG_15V_OVER_FLT,
+			   PWR_NEG_15V_UNDER_FLT,
+			   NO_TRIP_SCALE,
+			   NO_FLOOR,
+			   NO_COUNTER);
 
-  ETMAnalogInitializeInput(&global_data_A36444.analog_input_pic_adc_test_dac, MACRO_DEC_TO_SCALE_FACTOR_16(1), OFFSET_ZERO, ANALOG_INPUT_NO_CALIBRATION,
-			   ADC_DAC_TEST_OVER_FLT, ADC_DAC_TEST_UNDER_FLT, NO_TRIP_SCALE, NO_FLOOR, NO_COUNTER);
+  ETMAnalogInitializeInput(&global_data_A36444.analog_input_pic_adc_test_dac,
+			   MACRO_DEC_TO_SCALE_FACTOR_16(1),
+			   OFFSET_ZERO,
+			   ANALOG_INPUT_C,
+			   ADC_DAC_TEST_OVER_FLT,
+			   ADC_DAC_TEST_UNDER_FLT,
+			   NO_TRIP_SCALE,
+			   NO_FLOOR,
+			   NO_COUNTER);
 
 
 
   // Initialize the Analog Output Data Structures
-  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_high_energy_vprog, MACRO_DEC_TO_SCALE_FACTOR_16(2.96296), OFFSET_ZERO, ANALOG_OUTPUT_NO_CALIBRATION,
-			    HV_LAMBDA_MAX_VPROG, HV_LAMBDA_MIN_VPROG, HV_LAMBDA_DAC_ZERO_OUTPUT);
+  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_high_energy_vprog,
+			    MACRO_DEC_TO_SCALE_FACTOR_16(2.96296),
+			    OFFSET_ZERO,
+			    ANALOG_OUTPUT_2,
+			    HV_LAMBDA_MAX_VPROG,
+			    HV_LAMBDA_MIN_VPROG,
+			    HV_LAMBDA_DAC_ZERO_OUTPUT);
 
-  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_low_energy_vprog, MACRO_DEC_TO_SCALE_FACTOR_16(2.96296), OFFSET_ZERO, ANALOG_OUTPUT_NO_CALIBRATION,
-			    HV_LAMBDA_MAX_VPROG, HV_LAMBDA_MIN_VPROG, HV_LAMBDA_DAC_ZERO_OUTPUT);
+  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_low_energy_vprog,
+			    MACRO_DEC_TO_SCALE_FACTOR_16(2.96296),
+			    OFFSET_ZERO,
+			    ANALOG_OUTPUT_3,
+			    HV_LAMBDA_MAX_VPROG,
+			    HV_LAMBDA_MIN_VPROG,
+			    HV_LAMBDA_DAC_ZERO_OUTPUT);
 
-  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_spare, MACRO_DEC_TO_SCALE_FACTOR_16(5.33333), OFFSET_ZERO, ANALOG_OUTPUT_NO_CALIBRATION,
-			    10000, 0, 0);
+  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_spare,
+			    MACRO_DEC_TO_SCALE_FACTOR_16(5.33333),
+			    OFFSET_ZERO,
+			    ANALOG_OUTPUT_0,
+			    10000,
+			    0,
+			    0);
 
-  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_adc_test, MACRO_DEC_TO_SCALE_FACTOR_16(1), OFFSET_ZERO, ANALOG_OUTPUT_NO_CALIBRATION,
-			    0xFFFF, 0, 0);
+  ETMAnalogInitializeOutput(&global_data_A36444.analog_output_adc_test,
+			    MACRO_DEC_TO_SCALE_FACTOR_16(1),
+			    OFFSET_ZERO,
+			    ANALOG_OUTPUT_NO_CALIBRATION,
+			    0xFFFF,
+			    0,
+			    0);
 
   ETMAnalogSetOutput(&global_data_A36444.analog_output_spare, 3000);
   ETMAnalogSetOutput(&global_data_A36444.analog_output_adc_test, ADC_DAC_TEST_VALUE);
@@ -446,10 +522,10 @@ void InitializeA36444(void) {
 
   // Update the spare analog output and the DAC test output
   WriteLTC265XTwoChannels(&U14_LTC2654,
-			  LTC265X_WRITE_AND_UPDATE_DAC_A, global_data_A36444.analog_output_spare.dac_setting_scaled_and_calibrated,
-			  LTC265X_WRITE_AND_UPDATE_DAC_B, global_data_A36444.analog_output_adc_test.dac_setting_scaled_and_calibrated);
-  
-  
+			  LTC265X_WRITE_AND_UPDATE_DAC_A,
+			  global_data_A36444.analog_output_spare.dac_setting_scaled_and_calibrated,
+			  LTC265X_WRITE_AND_UPDATE_DAC_B,
+			  global_data_A36444.analog_output_adc_test.dac_setting_scaled_and_calibrated);
   
 
   //Initialize the internal ADC for Startup Power Checks
