@@ -8,8 +8,8 @@
 
 
 //unsigned int dan_test_array[16] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
-unsigned int dan_test_1;
-unsigned int dan_test_2;
+//unsigned int dan_test_1;
+//unsigned int dan_test_2;
 
 // This is firmware for the HV Lambda Board
 
@@ -133,6 +133,9 @@ void DoStateMachine(void) {
       if (global_data_A36444.run_post_pulse_process) {
 	// Run this once after each pulse
 	
+	// Send the pulse data up to the ECB for logging
+	ETMCanSlaveLogCustomPacketC();
+
 	// Update the HV Lambda Program Values
 	ETMAnalogScaleCalibrateDACSetting(&global_data_A36444.analog_output_high_energy_vprog);
 	ETMAnalogScaleCalibrateDACSetting(&global_data_A36444.analog_output_low_energy_vprog);
@@ -650,49 +653,6 @@ void InitializeA36444(void) {
   _ADIE = 1;
   _ADON = 1;
 
-
-
-
-
-
-  dan_test_1 = ETMEEPromReadWord(0x133);
-  ETMEEPromWriteWord(0x133, 0x1321);
-
-  //  ETMEEPromReadPage(&U3_M24LC64F, 0, 16, dan_test_array);
-  Nop();
-  Nop();
-  Nop();
-  Nop();
-
-  //ETMEEPromReadPage(&U3_M24LC64F, 1, 16, dan_test_array);
-  Nop();
-  Nop();
-  Nop();
-  Nop();
-
-
-  //ETMEEPromReadPage(&U3_M24LC64F, 2, 16, dan_test_array);
-  Nop();
-  Nop();
-  Nop();
-  Nop();
-
-
-  //ETMEEPromReadPage(&U3_M24LC64F, 3, 16, dan_test_array);
-  Nop();
-  Nop();
-  Nop();
-  Nop();
-
-
-  //ETMEEPromReadPage(&U3_M24LC64F, 0, 16, dan_test_array);
-  Nop();
-  Nop();
-  Nop();
-  Nop();
-
-
-  
 
 }
 
