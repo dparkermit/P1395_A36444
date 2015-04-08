@@ -4,13 +4,6 @@
 #include "ETM_EEPROM.h"
 
 
-
-
-
-//unsigned int dan_test_array[16] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
-//unsigned int dan_test_1;
-//unsigned int dan_test_2;
-
 // This is firmware for the HV Lambda Board
 
 _FOSC(ECIO & CSW_FSCM_OFF); 
@@ -134,7 +127,9 @@ void DoStateMachine(void) {
 	// Run this once after each pulse
 	
 	// Send the pulse data up to the ECB for logging
-	ETMCanSlaveLogCustomPacketC();
+	if (_SYNC_CONTROL_HIGH_SPEED_LOGGING) {
+	  ETMCanSlaveLogCustomPacketC();
+	}
 
 	// Update the HV Lambda Program Values
 	ETMAnalogScaleCalibrateDACSetting(&global_data_A36444.analog_output_high_energy_vprog);
@@ -183,6 +178,8 @@ void DoStateMachine(void) {
     break;
   }
 }
+
+#define PIN_COUNTER_FAULT     50       // 500mS
 
 
 void DoA36444(void) {
@@ -241,22 +238,49 @@ void DoA36444(void) {
     }
     
     if ((global_data_A36444.control_state == STATE_OPERATE) || (global_data_A36444.control_state == STATE_FAULT_WAIT)) {
+
       // Check for faults from Lambda
       if (PIN_LAMBDA_SUM_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
-	_FAULT_LAMBDA_SUM_FAULT = 1;
-	global_data_A36444.fault_active = 1;
+	global_data_A36444.sum_flt_counter++;
+	if (global_data_A36444.sum_flt_counter >= PIN_COUNTER_FAULT) {
+	  global_data_A36444.sum_flt_counter = PIN_COUNTER_FAULT;
+	  _FAULT_LAMBDA_SUM_FAULT = 1;
+	  global_data_A36444.fault_active = 1;
+	} else {
+	  if (global_data_A36444.sum_flt_counter) {
+	    global_data_A36444.sum_flt_counter--;
+	  }
+	}
       }
  
       if (PIN_LAMBDA_HV_ON_READBACK != ILL_LAMBDA_HV_ON) {
-	_FAULT_LAMBDA_READBACK_HV_OFF = 1;
-	global_data_A36444.fault_active = 1;
+	global_data_A36444.hv_off_counter++;
+	if (global_data_A36444.hv_off_counter >= PIN_COUNTER_FAULT) {
+	  global_data_A36444.hv_off_counter = PIN_COUNTER_FAULT;
+	  _FAULT_LAMBDA_READBACK_HV_OFF = 1;
+	  global_data_A36444.fault_active = 1;
+	} else {
+	  if (global_data_A36444.hv_off_counter) {
+	    global_data_A36444.hv_off_counter--;
+	  }
+	}
       }
 
       if (PIN_LAMBDA_PHASE_LOSS_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
-	_FAULT_LAMBDA_PHASE_LOSS = 1;
-	global_data_A36444.fault_active = 1;
+	global_data_A36444.phase_loss_counter++;
+	if (global_data_A36444.phase_loss_counter >= PIN_COUNTER_FAULT) {
+	  global_data_A36444.phase_loss_counter = PIN_COUNTER_FAULT;
+	  _FAULT_LAMBDA_PHASE_LOSS = 1;
+	  global_data_A36444.fault_active = 1;
+	} else {
+	  if (global_data_A36444.phase_loss_counter) {
+	    global_data_A36444.phase_loss_counter--;
+	  }
+	}
       }
       
+      // DPARKER add these back in when you have the time
+      /*
       if (PIN_LAMBDA_OVER_TEMP_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
 	_FAULT_LAMBDA_OVER_TEMP = 1;
 	global_data_A36444.fault_active = 1;
@@ -271,10 +295,19 @@ void DoA36444(void) {
 	_FAULT_LAMBDA_LOAD_FLT = 1;
 	global_data_A36444.fault_active = 1;
       }    
-
+      */
+      
       if (PIN_LAMBDA_NOT_POWERED == ILL_LAMBDA_NOT_POWERED) {
-	_FAULT_LAMBDA_NOT_POWERED = 1;
-	global_data_A36444.fault_active = 1;
+	global_data_A36444.lambda_not_powered_counter++;
+	if (global_data_A36444.lambda_not_powered_counter >= PIN_COUNTER_FAULT) {
+	  global_data_A36444.lambda_not_powered_counter = PIN_COUNTER_FAULT;
+	  _FAULT_LAMBDA_NOT_POWERED = 1;
+	  global_data_A36444.fault_active = 1;
+	} else {
+	  if (global_data_A36444.lambda_not_powered_counter) {
+	    global_data_A36444.lambda_not_powered_counter--;
+	  }
+	}
       }
       
 
@@ -348,7 +381,6 @@ void InitializeA36444(void) {
   etm_can_my_configuration.firmware_major_rev = FIRMWARE_AGILE_REV;
   etm_can_my_configuration.firmware_branch = FIRMWARE_BRANCH;
   etm_can_my_configuration.firmware_minor_rev = FIRMWARE_MINOR_REV;
-
 
   // Configure Inhibit Interrupt
   _INT3IP = 7; // This must be the highest priority interrupt

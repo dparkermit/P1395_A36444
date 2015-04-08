@@ -303,6 +303,12 @@ typedef struct {
   unsigned int power_up_delay_counter;
   unsigned int fault_wait_time;
 
+  unsigned int sum_flt_counter;
+  unsigned int hv_off_counter;
+  unsigned int phase_loss_counter;
+  unsigned int lambda_not_powered_counter;
+
+
 } LambdaControlData;
 
 extern LambdaControlData global_data_A36444;
