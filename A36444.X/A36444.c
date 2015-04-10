@@ -184,6 +184,10 @@ void DoStateMachine(void) {
 
 void DoA36444(void) {
   
+  if (etm_can_next_pulse_level) {
+    PIN_LAMBDA_VOLTAGE_SELECT = !OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
+  }
+
   if (_T5IF) {
     // Timer has expired so execute the scheduled code (should be once every 10ms unless the configuration file is changes
     _T5IF = 0;
@@ -685,7 +689,7 @@ void InitializeA36444(void) {
   _ADIE = 1;
   _ADON = 1;
 
-
+  PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
 }
 
 
@@ -854,6 +858,10 @@ void __attribute__((interrupt, shadow, no_auto_psv)) _INT3Interrupt(void) {
   _T1IE = 0;
   
   while(!_T1IF);                                                   // what for the holdoff time to pass
+
+  // We need to guarantee that we start charging to the low energy mode voltage
+  etm_can_next_pulse_level = 0; // Need to clear this.  We will charge to low level until we recieve a command to charge to high level
+  PIN_LAMBDA_VOLTAGE_SELECT = OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY;
   
   PIN_LAMBDA_INHIBIT = !OLL_INHIBIT_LAMBDA;
   

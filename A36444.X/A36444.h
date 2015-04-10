@@ -149,6 +149,8 @@
 // ------- Digital Output Pins ---------//
 
 #define PIN_LAMBDA_VOLTAGE_SELECT             _LATD11
+#define OLL_LAMBDA_VOLTAGE_SELECT_LOW_ENERGY  0
+
 #define PIN_LAMBDA_INHIBIT                    _LATD0
 #define PIN_LAMBDA_ENABLE                     _LATD1
 
