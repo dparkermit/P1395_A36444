@@ -250,10 +250,10 @@ void DoA36444(void) {
 	  global_data_A36444.sum_flt_counter = PIN_COUNTER_FAULT;
 	  _FAULT_LAMBDA_SUM_FAULT = 1;
 	  global_data_A36444.fault_active = 1;
-	} else {
-	  if (global_data_A36444.sum_flt_counter) {
-	    global_data_A36444.sum_flt_counter--;
-	  }
+	}
+      } else {
+	if (global_data_A36444.sum_flt_counter) {
+	  global_data_A36444.sum_flt_counter--;
 	}
       }
  
@@ -263,26 +263,28 @@ void DoA36444(void) {
 	  global_data_A36444.hv_off_counter = PIN_COUNTER_FAULT;
 	  _FAULT_LAMBDA_READBACK_HV_OFF = 1;
 	  global_data_A36444.fault_active = 1;
-	} else {
-	  if (global_data_A36444.hv_off_counter) {
-	    global_data_A36444.hv_off_counter--;
-	  }
+	}
+      } else {
+	if (global_data_A36444.hv_off_counter) {
+	  global_data_A36444.hv_off_counter--;
 	}
       }
 
+#ifdef __LCS1202
       if (PIN_LAMBDA_PHASE_LOSS_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
 	global_data_A36444.phase_loss_counter++;
 	if (global_data_A36444.phase_loss_counter >= PIN_COUNTER_FAULT) {
 	  global_data_A36444.phase_loss_counter = PIN_COUNTER_FAULT;
 	  _FAULT_LAMBDA_PHASE_LOSS = 1;
 	  global_data_A36444.fault_active = 1;
-	} else {
-	  if (global_data_A36444.phase_loss_counter) {
-	    global_data_A36444.phase_loss_counter--;
-	  }
+	}
+      } else {
+	if (global_data_A36444.phase_loss_counter) {
+	  global_data_A36444.phase_loss_counter--;
 	}
       }
-      
+#endif      
+
       // DPARKER add these back in when you have the time
       /*
       if (PIN_LAMBDA_OVER_TEMP_FLT == ILL_LAMBDA_FAULT_ACTIVE) {
@@ -307,10 +309,10 @@ void DoA36444(void) {
 	  global_data_A36444.lambda_not_powered_counter = PIN_COUNTER_FAULT;
 	  _FAULT_LAMBDA_NOT_POWERED = 1;
 	  global_data_A36444.fault_active = 1;
-	} else {
-	  if (global_data_A36444.lambda_not_powered_counter) {
-	    global_data_A36444.lambda_not_powered_counter--;
-	  }
+	}
+      } else {
+	if (global_data_A36444.lambda_not_powered_counter) {
+	  global_data_A36444.lambda_not_powered_counter--;
 	}
       }
       
@@ -342,6 +344,9 @@ void DoA36444(void) {
     local_debug_data.debug_7 = global_data_A36444.analog_output_low_energy_vprog.set_point;
  
     local_debug_data.debug_8 = global_data_A36444.control_state;
+
+
+    local_debug_data.debug_F = global_data_A36444.lambda_not_powered_counter;
 
     global_data_A36444.no_pulse_counter++;
     
@@ -434,9 +439,19 @@ void InitializeA36444(void) {
   // ETMCanSelectInternalEEprom();
 
 
+#ifdef __LCS1202
+#define VPROG_SCALE_FACTOR 2.66667
+#define VMON_SCALE_FACTOR  .31250
+#else
+#define VPROG_SCALE_FACTOR 2.96296
+#define VMON_SCALE_FACTOR  .28125
+#endif
+
+
+
   // Initialize the Analog input data structures
   ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_vmon,
-			   MACRO_DEC_TO_SCALE_FACTOR_16(.28125),
+			   MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR),
 			   OFFSET_ZERO,
 			   ANALOG_INPUT_3,
 			   NO_OVER_TRIP,
@@ -446,7 +461,7 @@ void InitializeA36444(void) {
 			   NO_COUNTER);
   
   ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_vpeak,
-			   MACRO_DEC_TO_SCALE_FACTOR_16(.28125),
+			   MACRO_DEC_TO_SCALE_FACTOR_16(VMON_SCALE_FACTOR),
 			   OFFSET_ZERO,
 			   ANALOG_INPUT_5,
 			   NO_OVER_TRIP,
@@ -517,9 +532,10 @@ void InitializeA36444(void) {
 
 
 
+
   // Initialize the Analog Output Data Structures
   ETMAnalogInitializeOutput(&global_data_A36444.analog_output_high_energy_vprog,
-			    MACRO_DEC_TO_SCALE_FACTOR_16(2.96296),
+			    MACRO_DEC_TO_SCALE_FACTOR_16(VPROG_SCALE_FACTOR),
 			    OFFSET_ZERO,
 			    ANALOG_OUTPUT_2,
 			    HV_LAMBDA_MAX_VPROG,
@@ -527,7 +543,7 @@ void InitializeA36444(void) {
 			    HV_LAMBDA_DAC_ZERO_OUTPUT);
 
   ETMAnalogInitializeOutput(&global_data_A36444.analog_output_low_energy_vprog,
-			    MACRO_DEC_TO_SCALE_FACTOR_16(2.96296),
+			    MACRO_DEC_TO_SCALE_FACTOR_16(VPROG_SCALE_FACTOR),
 			    OFFSET_ZERO,
 			    ANALOG_OUTPUT_3,
 			    HV_LAMBDA_MAX_VPROG,
