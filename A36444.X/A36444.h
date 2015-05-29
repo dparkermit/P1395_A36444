@@ -239,7 +239,7 @@
 #define PR5_VALUE_10_MILLISECONDS      (FCY_CLK_MHZ*PR5_PERIOD_US/8)
 
 
-
+/*
 // -------------------- A36444 STATUS BIT CONFIGURATION ------------------------ //
 #define STATUS_LAMBDA_AT_EOC                   STATUS_BIT_USER_DEFINED_8
 #define STATUS_BIT_SOFTWARE_DISABLE            STATUS_BIT_USER_DEFINED_9
@@ -257,7 +257,7 @@
 #define FAULT_LAMBDA_LOAD_FAULT                FAULT_BIT_USER_DEFINED_5
 #define FAULT_LAMBDA_EOC_WARNING               FAULT_BIT_USER_DEFINED_6
 #define FAULT_LAMBDA_ANALOG_TEMP_OOR           FAULT_BIT_USER_DEFINED_7
-
+*/
 
 // -------------------- FAULT CONFIGURATION -------------------------------------- //
 //#define A36444_INHIBIT_MASK        0b0001011000000100  
