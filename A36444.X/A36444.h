@@ -310,7 +310,10 @@ typedef struct {
   unsigned int phase_loss_counter;
   unsigned int lambda_not_powered_counter;
 
-
+  unsigned int vmon_store_1;
+  unsigned int vmon_store_2;
+  unsigned int vmon_store_3;
+  unsigned int store_lambda_voltage;
 } LambdaControlData;
 
 extern LambdaControlData global_data_A36444;

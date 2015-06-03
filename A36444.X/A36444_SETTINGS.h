@@ -16,7 +16,7 @@
 
 
 
-#define LAMBDA_HOLDOFF_TIME_US         1000        // 400 uS
+#define LAMBDA_HOLDOFF_TIME_US         700        // 400 uS
 #define LAMBDA_MAX_CHARGE_TIME_US      2400      // 2.4mS
 #define RETRIGGER_BLANKING_US          1100       // 500us
 

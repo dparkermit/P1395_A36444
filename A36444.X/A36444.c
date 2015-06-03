@@ -776,6 +776,12 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
 	global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUF1 + ADCBUF5;
 	global_data_A36444.analog_input_lambda_vpeak.adc_accumulator          += ADCBUF2 + ADCBUF6;
 	global_data_A36444.analog_input_lambda_imon.adc_accumulator           += ADCBUF3 + ADCBUF7;	
+	
+	if (global_data_A36444.store_lambda_voltage) {
+	  global_data_A36444.vmon_store_1 = ADCBUF0;
+	  global_data_A36444.vmon_store_2 = ADCBUF4;
+	  global_data_A36444.store_lambda_voltage = 0;
+	}
       }
 
     } else {
@@ -790,6 +796,12 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt(void) {
 	global_data_A36444.analog_input_lambda_heat_sink_temp.adc_accumulator += ADCBUF9 + ADCBUFD;
 	global_data_A36444.analog_input_lambda_vpeak.adc_accumulator          += ADCBUFA + ADCBUFE;
 	global_data_A36444.analog_input_lambda_imon.adc_accumulator           += ADCBUFB + ADCBUFF;
+	
+	if (global_data_A36444.store_lambda_voltage) {
+	  global_data_A36444.vmon_store_1 = ADCBUF8;
+	  global_data_A36444.vmon_store_2 = ADCBUFC;
+	  global_data_A36444.store_lambda_voltage = 0;
+	}
       }
 
     }
@@ -853,6 +865,12 @@ void __attribute__((interrupt, shadow, no_auto_psv)) _INT3Interrupt(void) {
   
   PIN_LAMBDA_INHIBIT = OLL_INHIBIT_LAMBDA;
   
+  if (_BUFS) {
+    global_data_A36444.vmon_store_3 = ADCBUF4;
+  } else {
+    global_data_A36444.vmon_store_3 = ADCBUFC;
+  }
+
   // Setup timer1 to time the inhibit period
   T1CONbits.TON = 0;
   TMR1 = 0;
@@ -913,6 +931,7 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
   _T1IF = 0;         // Clear the interrupt flag
   _T1IE = 0;         // Disable the interrupt (This will be enabled the next time that a capacitor charging sequence starts)
   T1CONbits.TON = 0;   // Stop the timer from incrementing (Again this will be restarted with the next time the capacitor charge sequence starts)
+  global_data_A36444.store_lambda_voltage = 1;
 
   if (PIN_LAMBDA_EOC != ILL_LAMBDA_AT_EOC) {
     __delay32(DELAY_TCY_5US);
