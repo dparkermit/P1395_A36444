@@ -439,15 +439,6 @@ void InitializeA36444(void) {
   // ETMCanSelectInternalEEprom();
 
 
-#ifdef __LCS1202
-#define VPROG_SCALE_FACTOR 2.66667
-#define VMON_SCALE_FACTOR  .31250
-#else
-#define VPROG_SCALE_FACTOR 2.96296
-#define VMON_SCALE_FACTOR  .28125
-#endif
-
-
 
   // Initialize the Analog input data structures
   ETMAnalogInitializeInput(&global_data_A36444.analog_input_lambda_vmon,

@@ -2,6 +2,15 @@
 #define __A36444_SETTINGS_H
 
 
+#ifdef __LCS1202
+#define VPROG_SCALE_FACTOR 2.66667
+#define VMON_SCALE_FACTOR  .31250
+#else
+#define VPROG_SCALE_FACTOR 2.96296
+#define VMON_SCALE_FACTOR  .28125
+#endif
+
+
 // Settings for the HV Lambda 
 #define HV_LAMBDA_MAX_VPROG            19000
 #define HV_LAMBDA_MIN_VPROG            3000
